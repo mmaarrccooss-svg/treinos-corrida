@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0e">
+<title>Rodagem Serra · contínuo com subida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+  :root {
+    --bg: #0a0b0e;
+    --fg: #f5f5f5;
+    --muted: rgba(255,255,255,0.55);
+    --line: rgba(255,255,255,0.12);
+    --zone-good: #76ff7a;
+    --zone-low: #ffd166;
+    --zone-high: #ff5252;
+  }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Barlow Condensed', sans-serif;
+    background: var(--bg); color: var(--fg);
+    transition: background 0.5s ease;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  body.state-ready { background: linear-gradient(160deg, #2d3142 0%, #0a0b0e 100%); }
+  body.state-prep { background: linear-gradient(160deg, #f4a261 0%, #b86a2a 100%); }
+  body.state-warmup { background: linear-gradient(160deg, #f4a261 0%, #b86a2a 100%); }
+  body.state-main { background: linear-gradient(160deg, #3a86ff 0%, #1e3a8a 100%); }
+  body.state-cooldown { background: linear-gradient(160deg, #52796f 0%, #2f3e46 100%); }
+  body.state-finished { background: linear-gradient(160deg, #2d3142 0%, #0a0b0e 100%); }
+
+  .app {
+    height: 100%; max-width: 520px; margin: 0 auto;
+    display: grid; grid-template-rows: auto auto 1fr auto auto auto;
+    padding: 12px 20px 18px; gap: 8px;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header .title { color: var(--fg); font-weight: 700; }
+
+  /* Phases progress bar */
+  .phases-bar {
+    display: grid; gap: 4px; margin-top: 2px;
+    height: 6px;
+  }
+  .phases-bar .seg {
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px;
+    position: relative; overflow: hidden;
+    transition: background 0.3s;
+  }
+  .phases-bar .seg .fill {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.95);
+    transform-origin: left; transform: scaleX(0);
+    transition: transform 0.3s linear;
+  }
+  .phases-bar .seg.current {
+    box-shadow: 0 0 14px rgba(255,255,255,0.5);
+  }
+  .phase-labels {
+    display: grid; gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .phase-labels span { text-align: center; }
+  .phase-labels span.current { color: var(--fg); font-weight: 700; }
+
+  .main {
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center; padding: 6px 0;
+  }
+  .phase-label {
+    font-weight: 900;
+    font-size: clamp(40px, 12vw, 64px);
+    letter-spacing: 0.06em; line-height: 0.95;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .phase-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+    max-width: 90%; line-height: 1.5;
+  }
+  .countdown {
+    font-weight: 800;
+    font-size: clamp(90px, 26vw, 150px);
+    line-height: 0.85; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em; text-shadow: 0 4px 32px rgba(0,0,0,0.25);
+  }
+  .countdown.flash { animation: flash 0.5s ease-out; }
+  @keyframes flash { 0% { transform: scale(1.12); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+
+  .hr-row {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-top: 14px; font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .hr-value {
+    font-size: 50px; font-weight: 700; line-height: 1;
+    transition: color 0.3s;
+  }
+  .hr-value.disconnected { color: rgba(255,255,255,0.25); }
+  .hr-value.zone-good { color: var(--zone-good); }
+  .hr-value.zone-low { color: var(--zone-low); }
+  .hr-value.zone-high { color: var(--zone-high); }
+  .hr-unit { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+
+  .zone-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    margin-top: 12px; color: rgba(255,255,255,0.8);
+    text-align: center; max-width: 90%;
+  }
+
+  .total {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--muted); padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  .total .val { color: var(--fg); font-weight: 700; }
+
+  .controls { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .controls.three { grid-template-columns: 1fr 1fr 1fr; }
+  button {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800; font-size: 18px; letter-spacing: 0.12em;
+    text-transform: uppercase; border: none; border-radius: 12px;
+    padding: 18px 8px; cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    color: #0a0b0e; background: #fff;
+  }
+  button.secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+  button.tertiary {
+    background: rgba(255,255,255,0.08); color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    font-size: 13px; padding: 12px;
+  }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .connect-strip {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .connect-strip .status { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+  .dot.live {
+    background: #76ff7a; box-shadow: 0 0 10px var(--zone-good);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .connect-strip .ble-btn {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border: none; border-radius: 6px; padding: 8px 12px;
+    font-size: 11px; letter-spacing: 0.14em; cursor: pointer;
+    font-family: inherit; text-transform: uppercase; font-weight: 700;
+  }
+
+  /* Report */
+  .report {
+    position: fixed; inset: 0; background: #0a0b0e;
+    z-index: 100; overflow-y: auto; display: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .report.open { display: block; }
+  .report-inner { max-width: 520px; margin: 0 auto; padding: 24px 20px 32px; }
+  .report h1 {
+    font-weight: 900; font-size: 38px; letter-spacing: 0.04em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .report .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 24px;
+  }
+  .report h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted); margin: 24px 0 12px;
+    border-top: 1px solid var(--line); padding-top: 18px;
+  }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px;
+  }
+  .stat .k { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .stat .v { font-weight: 800; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .u { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-left: 4px; }
+  table.phases-table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.phases-table th, table.phases-table td {
+    padding: 9px 4px; border-bottom: 1px solid var(--line);
+    text-align: right;
+  }
+  table.phases-table th {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  table.phases-table th:first-child, table.phases-table td:first-child { text-align: left; }
+  .export-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; }
+  .close-row { margin-top: 16px; }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); color: #0a0b0e;
+    padding: 12px 20px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+    opacity: 0; transition: opacity 0.3s;
+    z-index: 200; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body class="state-ready">
+<div class="app">
+  <div class="header">
+    <div class="title">RODAGEM SERRA · 52min</div>
+    <div id="status">PRONTO</div>
+  </div>
+
+  <div>
+    <div class="phases-bar" id="phasesBar"></div>
+    <div class="phase-labels" id="phaseLabels"></div>
+  </div>
+
+  <div class="main">
+    <div class="phase-label" id="phaseLabel">PRONTO</div>
+    <div class="phase-sub" id="phaseSub">Conecte a cinta e toque iniciar</div>
+    <div class="countdown" id="countdown">52:00</div>
+    <div class="hr-row">
+      <div class="hr-value disconnected" id="hrValue">--</div>
+      <div class="hr-unit">bpm</div>
+    </div>
+    <div class="zone-info" id="zoneInfo">Rodagem contínua com subida controlada</div>
+  </div>
+
+  <div class="connect-strip">
+    <div class="status">
+      <div class="dot" id="bleDot"></div>
+      <span id="bleStatus">Cinta desconectada</span>
+    </div>
+    <button class="ble-btn" id="bleBtn">Conectar</button>
+  </div>
+
+  <div class="total">
+    <div>Total <span class="val" id="totalTime">00:00</span> / 52:00</div>
+    <div>↗ ↘ ⚠ alertas FC</div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button id="startBtn">Iniciar</button>
+    <button id="resetBtn" class="secondary">Reiniciar</button>
+  </div>
+</div>
+
+<div class="report" id="report">
+  <div class="report-inner">
+    <h1>Treino Concluído</h1>
+    <div class="sub" id="reportSub">—</div>
+
+    <h2>Frequência Cardíaca · Geral</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">FC Média</div><div class="v"><span id="rHrAvg">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">FC Máxima</div><div class="v"><span id="rHrMax">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">FC Mínima</div><div class="v"><span id="rHrMin">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">Duração</div><div class="v" id="rDuration">—</div></div>
+    </div>
+
+    <h2>Por Fase</h2>
+    <table class="phases-table">
+      <thead><tr><th>Fase</th><th>Tempo</th><th>Média</th><th>Máx</th><th>% zona</th></tr></thead>
+      <tbody id="phasesTbody"></tbody>
+    </table>
+
+    <h2>Picos na Rodagem</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Tempo &gt;165 bpm</div><div class="v" id="rPeakTime">—</div></div>
+      <div class="stat"><div class="k">Picos isolados</div><div class="v" id="rPeakCount">—</div></div>
+    </div>
+
+    <div class="export-row">
+      <button class="tertiary" id="copyBtn">Copiar resumo</button>
+      <button class="tertiary" id="csvBtn">Baixar CSV</button>
+      <button class="tertiary" id="jsonBtn">Baixar JSON</button>
+    </div>
+    <div class="close-row">
+      <button class="secondary" id="closeReportBtn" style="width:100%">Fechar relatório</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copiado</div>
+
+<script>
+'use strict';
+
+// =====================
+//  Workout config
+// =====================
+const WORKOUT = {
+  name: 'Rodagem Serra · 52min',
+  shortName: 'RODAGEM SERRA',
+  prep: 5,
+  phases: [
+    {
+      key: 'warmup',
+      name: 'AQUECIMENTO',
+      shortLabel: 'AQ 10\'',
+      duration: 600,
+      subtitle: 'Trote leve · 7:50–8:40/km · soltar pernas',
+      zoneLabel: 'Alvo 115–135 bpm',
+      zones: { lowAlert: null, lowOK: 115, highOK: 135, highAlert: 145, veryHighAlert: 155 }
+    },
+    {
+      key: 'main',
+      name: 'RODAGEM',
+      shortLabel: 'RODAGEM 35\'',
+      duration: 2100,
+      minDuration: 1800,    // botão Avançar habilita aos 30 min
+      maxDuration: 2400,
+      subtitle: 'Plano 6:50–7:20/km · controle nas subidas',
+      zoneLabel: 'Alvo 135–155 · até 165 em subidas',
+      zones: { lowAlert: 130, lowOK: 135, highOK: 165, highAlert: 168, veryHighAlert: 175 }
+    },
+    {
+      key: 'cooldown',
+      name: 'DESAQUECIMENTO',
+      shortLabel: 'DESAQ 7\'',
+      duration: 420,
+      subtitle: 'Caminhada ou trote muito leve · baixar FC',
+      zoneLabel: 'Baixando · alvo <140 bpm',
+      zones: { lowAlert: null, lowOK: 0, highOK: 140, highAlert: 148, veryHighAlert: 160 }
+    }
+  ]
+};
+const TOTAL = WORKOUT.phases.reduce((s, p) => s + p.duration, 0);
+const HR_GRACE_MS = 15000;       // FC demora mais a estabilizar em treino contínuo
+const HR_PERSIST_RE_MS = 20000;
+const HR_TAIL_GUARD_SEC = 3;
+
+// =====================
+//  State
+// =====================
+let mode = 'idle';            // idle | prep | running | finished
+let phaseIdx = -1;            // 0..phases.length-1 quando running
+let phasePos = 0;             // segundos decorridos na fase atual
+let prepRemaining = 0;
+let totalElapsed = 0;
+let intervalId = null;
+let lastTick = null;
+let wakeLock = null;
+let audioCtx = null;
+let startedAt = null;
+
+let bleDevice = null;
+let bleChar = null;
+let currentBpm = null;
+let lastBpmAt = 0;
+
+let lastHrZone = null;
+let lastHrAlertAt = 0;
+let phaseStartedAt = 0;
+
+let samples = [];             // {t, phaseKey, bpm}
+
+// =====================
+//  DOM
+// =====================
+const $ = id => document.getElementById(id);
+const body = document.body;
+const els = {
+  phaseLabel: $('phaseLabel'), phaseSub: $('phaseSub'),
+  countdown: $('countdown'), zoneInfo: $('zoneInfo'),
+  totalTime: $('totalTime'), status: $('status'),
+  controls: $('controls'),
+  startBtn: $('startBtn'), resetBtn: $('resetBtn'),
+  phasesBar: $('phasesBar'), phaseLabels: $('phaseLabels'),
+  hrValue: $('hrValue'),
+  bleDot: $('bleDot'), bleStatus: $('bleStatus'), bleBtn: $('bleBtn'),
+  report: $('report'), toast: $('toast'),
+  reportSub: $('reportSub'),
+  rHrAvg: $('rHrAvg'), rHrMax: $('rHrMax'), rHrMin: $('rHrMin'), rDuration: $('rDuration'),
+  phasesTbody: $('phasesTbody'),
+  rPeakTime: $('rPeakTime'), rPeakCount: $('rPeakCount'),
+  copyBtn: $('copyBtn'), csvBtn: $('csvBtn'), jsonBtn: $('jsonBtn'),
+  closeReportBtn: $('closeReportBtn')
+};
+
+// Build phases bar
+(function buildPhasesBar() {
+  const grid = WORKOUT.phases.map(p => p.duration + 'fr').join(' ');
+  els.phasesBar.style.gridTemplateColumns = grid;
+  els.phaseLabels.style.gridTemplateColumns = grid;
+  WORKOUT.phases.forEach((p, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg'; seg.id = 'seg-' + i;
+    const fill = document.createElement('div');
+    fill.className = 'fill'; fill.id = 'fill-' + i;
+    seg.appendChild(fill);
+    els.phasesBar.appendChild(seg);
+
+    const lbl = document.createElement('span');
+    lbl.id = 'lbl-' + i;
+    lbl.textContent = p.shortLabel;
+    els.phaseLabels.appendChild(lbl);
+  });
+})();
+
+// =====================
+//  Audio
+// =====================
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, vol = 0.5, type = 'sine', delay = 0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.05);
+}
+function vib(p) { if (navigator.vibrate) navigator.vibrate(p); }
+
+// Phase entry sounds
+function alertWarmup() {
+  tone(520, 0.18, 0.5, 'sine', 0);
+  tone(720, 0.3, 0.55, 'sine', 0.2);
+  vib([200, 100, 250]);
+}
+function alertMain() {
+  tone(600, 0.12, 0.55, 'triangle', 0);
+  tone(800, 0.12, 0.55, 'triangle', 0.14);
+  tone(1000, 0.4, 0.6, 'triangle', 0.28);
+  vib([180, 80, 180, 80, 350]);
+}
+function alertCooldown() {
+  tone(700, 0.2, 0.5, 'sine', 0);
+  tone(500, 0.35, 0.5, 'sine', 0.22);
+  vib([220, 120, 300]);
+}
+function alertFinish() {
+  tone(700, 0.18, 0.55, 'triangle', 0);
+  tone(900, 0.18, 0.55, 'triangle', 0.2);
+  tone(1100, 0.18, 0.55, 'triangle', 0.4);
+  tone(1400, 0.7, 0.65, 'triangle', 0.6);
+  vib([200, 80, 200, 80, 200, 80, 600]);
+}
+function tick3() { tone(700, 0.08, 0.4, 'sine'); }
+
+// HR alerts
+function alertHrLow() {
+  tone(620, 0.09, 0.4, 'triangle', 0);
+  tone(920, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrHigh() {
+  tone(920, 0.09, 0.4, 'triangle', 0);
+  tone(620, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrVeryHigh() {
+  tone(680, 0.1, 0.45, 'sawtooth', 0);
+  tone(500, 0.1, 0.45, 'sawtooth', 0.13);
+  tone(360, 0.25, 0.5, 'sawtooth', 0.26);
+  vib([120, 60, 120, 60, 240]);
+}
+
+// =====================
+//  Wake Lock
+// =====================
+async function acquireWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && mode === 'running') acquireWakeLock();
+});
+
+// =====================
+//  Bluetooth
+// =====================
+async function connectBLE() {
+  if (!('bluetooth' in navigator)) { showToast('Web Bluetooth indisponível'); return; }
+  try {
+    els.bleBtn.disabled = true; els.bleStatus.textContent = 'Procurando...';
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['heart_rate'] }],
+      optionalServices: ['battery_service']
+    });
+    els.bleStatus.textContent = `Conectando ${bleDevice.name || ''}...`;
+    bleDevice.addEventListener('gattserverdisconnected', onBleDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService('heart_rate');
+    bleChar = await service.getCharacteristic('heart_rate_measurement');
+    await bleChar.startNotifications();
+    bleChar.addEventListener('characteristicvaluechanged', onHrChange);
+    els.bleStatus.textContent = bleDevice.name || 'Cinta conectada';
+    els.bleDot.classList.add('live');
+    els.bleBtn.textContent = 'Desconectar';
+    els.bleBtn.disabled = false;
+  } catch (e) {
+    els.bleStatus.textContent = 'Falha: ' + (e.message || 'erro');
+    els.bleBtn.disabled = false;
+    bleDevice = null; bleChar = null;
+  }
+}
+function disconnectBLE() {
+  try { if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); } catch (e) {}
+  onBleDisconnect();
+}
+function onBleDisconnect() {
+  bleChar = null; bleDevice = null; currentBpm = null;
+  els.bleStatus.textContent = 'Cinta desconectada';
+  els.bleDot.classList.remove('live');
+  els.bleBtn.textContent = 'Conectar';
+  renderHr();
+}
+function onHrChange(e) {
+  const v = e.target.value;
+  const flags = v.getUint8(0);
+  const is16 = flags & 0x01;
+  currentBpm = is16 ? v.getUint16(1, true) : v.getUint8(1);
+  lastBpmAt = Date.now();
+  renderHr();
+  checkHrAlerts();
+}
+
+// =====================
+//  HR zone classification
+// =====================
+function classifyHr(bpm, phase) {
+  if (bpm == null || !phase) return null;
+  const z = phase.zones;
+  if (z.lowAlert != null && bpm < z.lowAlert) return 'low';
+  if (bpm > z.veryHighAlert) return 'veryHigh';
+  if (bpm > z.highAlert) return 'high';
+  return 'good';
+}
+function getZoneClass(bpm, phase) {
+  // For HR pill color
+  if (bpm == null || !phase) return '';
+  const z = phase.zones;
+  if (bpm >= z.lowOK && bpm <= z.highOK) return 'zone-good';
+  if (z.lowAlert != null && bpm < z.lowAlert) return 'zone-low';
+  if (bpm > z.veryHighAlert) return 'zone-high';
+  if (bpm > z.highAlert) return 'zone-low';
+  return 'zone-good';
+}
+function checkHrAlerts() {
+  if (currentBpm == null) return;
+  if (mode !== 'running') return;
+  if (Date.now() - lastBpmAt > 5000) return;
+  if (Date.now() - phaseStartedAt < HR_GRACE_MS) return;
+  const phase = WORKOUT.phases[phaseIdx];
+  if (!phase) return;
+  if ((phase.duration - phasePos) <= HR_TAIL_GUARD_SEC) return;
+
+  const zone = classifyHr(currentBpm, phase);
+  const now = Date.now();
+  if (zone !== lastHrZone) {
+    if (zone === 'low') alertHrLow();
+    else if (zone === 'high') alertHrHigh();
+    else if (zone === 'veryHigh') alertHrVeryHigh();
+    lastHrZone = zone;
+    lastHrAlertAt = now;
+  } else if (zone === 'veryHigh' && now - lastHrAlertAt > HR_PERSIST_RE_MS) {
+    alertHrVeryHigh();
+    lastHrAlertAt = now;
+  }
+}
+
+// =====================
+//  Render
+// =====================
+function fmt(s) {
+  s = Math.max(0, Math.round(s));
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+function fmtClock(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function setBodyState(s) { body.className = 'state-' + s; }
+function flashCountdown() {
+  els.countdown.classList.remove('flash'); void els.countdown.offsetWidth; els.countdown.classList.add('flash');
+}
+function renderHr() {
+  const v = els.hrValue;
+  if (currentBpm == null) {
+    v.textContent = '--'; v.className = 'hr-value disconnected'; return;
+  }
+  v.textContent = currentBpm;
+  const phase = (mode === 'running') ? WORKOUT.phases[phaseIdx] : null;
+  v.className = 'hr-value ' + getZoneClass(currentBpm, phase);
+}
+function updateProgressBar() {
+  for (let i = 0; i < WORKOUT.phases.length; i++) {
+    const seg = $('seg-' + i);
+    const fill = $('fill-' + i);
+    const lbl = $('lbl-' + i);
+    seg.classList.toggle('current', mode === 'running' && i === phaseIdx);
+    lbl.classList.toggle('current', mode === 'running' && i === phaseIdx);
+    let pct = 0;
+    if (mode === 'finished') pct = 1;
+    else if (i < phaseIdx) pct = 1;
+    else if (i === phaseIdx) pct = Math.min(1, phasePos / WORKOUT.phases[i].duration);
+    fill.style.transform = `scaleX(${pct})`;
+  }
+}
+function updateControls() {
+  // Add a "Next phase" button on main after minDuration; remove otherwise.
+  const existing = $('nextBtn');
+  const phase = (mode === 'running') ? WORKOUT.phases[phaseIdx] : null;
+  const canAdvance = phase && phase.minDuration != null && phasePos >= phase.minDuration;
+  if (canAdvance && !existing) {
+    const btn = document.createElement('button');
+    btn.id = 'nextBtn'; btn.className = 'secondary'; btn.textContent = 'Avançar';
+    btn.addEventListener('click', advanceManually);
+    els.controls.insertBefore(btn, els.resetBtn);
+    els.controls.classList.add('three');
+  } else if (!canAdvance && existing) {
+    existing.remove();
+    els.controls.classList.remove('three');
+  }
+}
+function render() {
+  let displayRemaining = 0;
+  if (mode === 'idle' || mode === 'finished') displayRemaining = TOTAL - totalElapsed;
+  else if (mode === 'prep') displayRemaining = prepRemaining;
+  else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    displayRemaining = p ? (p.duration - phasePos) : 0;
+  }
+  els.countdown.textContent = fmt(displayRemaining);
+  els.totalTime.textContent = fmt(totalElapsed);
+  updateProgressBar();
+
+  if (mode === 'idle') {
+    setBodyState('ready');
+    els.phaseLabel.textContent = 'PRONTO';
+    els.phaseSub.textContent = 'Conecte a cinta e toque iniciar';
+    els.zoneInfo.textContent = 'Aquecimento · Rodagem · Desaquecimento';
+    els.status.textContent = 'PRONTO';
+    els.startBtn.textContent = 'Iniciar';
+  } else if (mode === 'prep') {
+    setBodyState('prep');
+    els.phaseLabel.textContent = 'PREPARE-SE';
+    els.phaseSub.textContent = 'Aquecimento em instantes';
+    els.zoneInfo.textContent = 'Coloque a cinta e dê play no Strava';
+    els.status.textContent = 'PREP';
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    setBodyState(p.key);
+    els.phaseLabel.textContent = p.name;
+    els.phaseSub.textContent = p.subtitle;
+    els.zoneInfo.textContent = p.zoneLabel;
+    els.status.textContent = p.shortLabel;
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (mode === 'finished') {
+    setBodyState('finished');
+    els.phaseLabel.textContent = 'FIM';
+    els.phaseSub.textContent = 'Treino concluído · cansado mas inteiro';
+    els.zoneInfo.textContent = 'Hidratação · proteína · sono';
+    els.status.textContent = 'COMPLETO';
+    els.startBtn.textContent = 'Iniciar';
+  }
+  updateControls();
+  renderHr();
+}
+
+// =====================
+//  Phase machine
+// =====================
+function enterPrep() {
+  mode = 'prep'; prepRemaining = WORKOUT.prep;
+  phaseStartedAt = Date.now(); lastHrZone = null;
+  flashCountdown(); tone(600, 0.1, 0.35);
+}
+function enterPhase(idx) {
+  phaseIdx = idx; phasePos = 0;
+  phaseStartedAt = Date.now(); lastHrZone = null;
+  const p = WORKOUT.phases[idx];
+  if (p.key === 'warmup') alertWarmup();
+  else if (p.key === 'main') alertMain();
+  else if (p.key === 'cooldown') alertCooldown();
+  flashCountdown();
+}
+function finish() {
+  mode = 'finished';
+  stopInterval(); alertFinish(); releaseWakeLock();
+  setTimeout(showReport, 700);
+}
+function advanceManually() {
+  if (mode !== 'running') return;
+  const next = phaseIdx + 1;
+  if (next >= WORKOUT.phases.length) finish();
+  else enterPhase(next);
+  render();
+}
+
+// =====================
+//  Loop
+// =====================
+let sampleAccumulator = 0;
+function loop() {
+  const now = performance.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+
+  if (mode === 'prep') {
+    const prev = prepRemaining;
+    prepRemaining -= dt;
+    const ps = Math.ceil(prev), ns = Math.ceil(prepRemaining);
+    if (ps !== ns && (ns === 3 || ns === 2 || ns === 1)) tick3();
+    if (prepRemaining <= 0) {
+      mode = 'running';
+      enterPhase(0);
+    }
+  } else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    const prev = p.duration - phasePos;
+    phasePos += dt;
+    totalElapsed += dt;
+    const remaining = p.duration - phasePos;
+
+    // Sample once per second
+    sampleAccumulator += dt;
+    while (sampleAccumulator >= 1) {
+      sampleAccumulator -= 1;
+      const bpm = (currentBpm != null && Date.now() - lastBpmAt < 5000) ? currentBpm : null;
+      samples.push({
+        t: Math.round(totalElapsed),
+        phase: p.key,
+        bpm: bpm
+      });
+    }
+
+    // 3-2-1 countdown beeps (only if phase will end naturally — i.e. not in main waiting for manual)
+    const ps = Math.ceil(prev), ns = Math.ceil(remaining);
+    if (ps !== ns && (ns === 3 || ns === 2 || ns === 1)) tick3();
+
+    if (remaining <= 0) {
+      const next = phaseIdx + 1;
+      if (next >= WORKOUT.phases.length) finish();
+      else enterPhase(next);
+    }
+  }
+  render();
+}
+function startInterval() { lastTick = performance.now(); intervalId = setInterval(loop, 100); }
+function stopInterval() { if (intervalId) { clearInterval(intervalId); intervalId = null; } }
+
+// =====================
+//  Report
+// =====================
+function computeReport() {
+  const valid = samples.filter(s => s.bpm != null);
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b) => a+b.bpm, 0) / arr.length) : null;
+  const max = arr => arr.length ? Math.max(...arr.map(s => s.bpm)) : null;
+  const min = arr => arr.length ? Math.min(...arr.map(s => s.bpm)) : null;
+
+  const perPhase = WORKOUT.phases.map(p => {
+    const inPhase = valid.filter(s => s.phase === p.key);
+    const totalPhase = samples.filter(s => s.phase === p.key).length;
+    const z = p.zones;
+    const inZone = inPhase.filter(s => {
+      const isOK = s.bpm >= z.lowOK && s.bpm <= z.highOK;
+      return isOK;
+    });
+    return {
+      key: p.key, name: p.name,
+      duration: totalPhase,
+      avg: avg(inPhase), max: max(inPhase), min: min(inPhase),
+      zonePct: inPhase.length ? Math.round((inZone.length / inPhase.length) * 100) : null
+    };
+  });
+
+  // Peak analysis on main phase
+  const mainSamples = valid.filter(s => s.phase === 'main');
+  const peakSamples = mainSamples.filter(s => s.bpm > 165);
+  // Count isolated peaks (consecutive segments above 165 separated by < threshold)
+  let peakCount = 0;
+  let inPeak = false;
+  for (const s of mainSamples) {
+    if (s.bpm > 165 && !inPeak) { peakCount++; inPeak = true; }
+    else if (s.bpm <= 165) inPeak = false;
+  }
+
+  return {
+    workout: WORKOUT.name,
+    startedAt: startedAt ? fmtClock(new Date(startedAt)) : '—',
+    duration: fmt(totalElapsed),
+    totalSamples: samples.length,
+    validSamples: valid.length,
+    hrAvg: avg(valid), hrMax: max(valid), hrMin: min(valid),
+    perPhase,
+    peakTime: fmt(peakSamples.length),
+    peakCount
+  };
+}
+function showReport() {
+  const r = computeReport();
+  els.reportSub.textContent = `${r.workout} · ${r.startedAt}`;
+  els.rHrAvg.textContent = r.hrAvg ?? '—';
+  els.rHrMax.textContent = r.hrMax ?? '—';
+  els.rHrMin.textContent = r.hrMin ?? '—';
+  els.rDuration.textContent = r.duration;
+  els.phasesTbody.innerHTML = r.perPhase.map(p =>
+    `<tr><td>${p.name}</td><td>${fmt(p.duration)}</td><td>${p.avg ?? '—'}</td><td>${p.max ?? '—'}</td><td>${p.zonePct ?? '—'}%</td></tr>`
+  ).join('');
+  els.rPeakTime.textContent = r.peakTime;
+  els.rPeakCount.textContent = r.peakCount;
+  els.report.classList.add('open');
+}
+function hideReport() { els.report.classList.remove('open'); }
+
+function buildTextReport() {
+  const r = computeReport();
+  let s = '';
+  s += `🏃 RELATÓRIO DE TREINO\n`;
+  s += `${'='.repeat(30)}\n`;
+  s += `Treino: ${r.workout}\n`;
+  s += `Início: ${r.startedAt}\n`;
+  s += `Duração: ${r.duration}\n\n`;
+  s += `📊 FC GERAL\n`;
+  s += `Média: ${r.hrAvg ?? '—'} bpm\n`;
+  s += `Máxima: ${r.hrMax ?? '—'} bpm\n`;
+  s += `Mínima: ${r.hrMin ?? '—'} bpm\n\n`;
+  s += `📈 POR FASE\n`;
+  for (const p of r.perPhase) {
+    s += `${p.name} (${fmt(p.duration)})\n`;
+    s += `  Média: ${p.avg ?? '—'} | Máx: ${p.max ?? '—'} | Em zona: ${p.zonePct ?? '—'}%\n`;
+  }
+  s += `\n⛰ SUBIDAS (FC >165 bpm na Rodagem)\n`;
+  s += `Tempo total: ${r.peakTime}\n`;
+  s += `Picos isolados: ${r.peakCount}\n`;
+  s += `\nAmostras válidas: ${r.validSamples}/${r.totalSamples}`;
+  return s;
+}
+function buildCSV() {
+  let csv = 't_seg,fase,bpm\n';
+  for (const s of samples) csv += `${s.t},${s.phase},${s.bpm ?? ''}\n`;
+  return csv;
+}
+function buildJSON() {
+  return JSON.stringify({
+    workout: WORKOUT, startedAt: startedAt, finishedAt: Date.now(),
+    duration_seconds: Math.round(totalElapsed),
+    samples: samples, summary: computeReport()
+  }, null, 2);
+}
+function download(filename, content, mime = 'text/plain') {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+function showToast(msg) {
+  els.toast.textContent = msg;
+  els.toast.classList.add('show');
+  setTimeout(() => els.toast.classList.remove('show'), 1800);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast('Copiado'); }
+  catch (e) { showToast('Erro ao copiar'); }
+}
+
+// =====================
+//  Events
+// =====================
+els.bleBtn.addEventListener('click', () => {
+  if (bleDevice && bleDevice.gatt.connected) disconnectBLE();
+  else connectBLE();
+});
+els.startBtn.addEventListener('click', () => {
+  initAudio();
+  if (mode === 'idle' || mode === 'finished') {
+    phaseIdx = -1; phasePos = 0; totalElapsed = 0;
+    samples = []; startedAt = Date.now();
+    enterPrep(); acquireWakeLock(); startInterval();
+  } else if (intervalId) {
+    stopInterval();
+  } else {
+    startInterval(); acquireWakeLock();
+  }
+  render();
+});
+els.resetBtn.addEventListener('click', () => {
+  if (mode !== 'idle' && !confirm('Reiniciar o treino?')) return;
+  stopInterval(); releaseWakeLock();
+  mode = 'idle'; phaseIdx = -1; phasePos = 0; prepRemaining = 0;
+  totalElapsed = 0; samples = [];
+  render();
+});
+els.copyBtn.addEventListener('click', () => copyText(buildTextReport()));
+els.csvBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`rodagem_serra_${ts}.csv`, buildCSV(), 'text/csv');
+});
+els.jsonBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`rodagem_serra_${ts}.json`, buildJSON(), 'application/json');
+});
+els.closeReportBtn.addEventListener('click', hideReport);
+
+render();
+</script>
+</body>
+</html>
