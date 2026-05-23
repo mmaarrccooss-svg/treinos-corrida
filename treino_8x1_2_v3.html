@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0e">
+<title>8 × (1' forte / 2' leve) · com FC + alertas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+
+  :root {
+    --bg: #0a0b0e;
+    --fg: #f5f5f5;
+    --muted: rgba(255,255,255,0.55);
+    --line: rgba(255,255,255,0.12);
+    --hard: #e63946;
+    --hard-dark: #8b1320;
+    --easy: #2a9d8f;
+    --easy-dark: #145a52;
+    --ready: #f4a261;
+    --done: #1a1a2e;
+    --zone-good: #76ff7a;
+    --zone-low: #ffd166;
+    --zone-high: #ff5252;
+  }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    font-family: 'Barlow Condensed', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    transition: background 0.4s ease;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  body.state-hard { background: linear-gradient(160deg, var(--hard) 0%, var(--hard-dark) 100%); }
+  body.state-easy { background: linear-gradient(160deg, var(--easy) 0%, var(--easy-dark) 100%); }
+  body.state-ready { background: linear-gradient(160deg, var(--ready) 0%, #b86a2a 100%); }
+  body.state-finished { background: linear-gradient(160deg, #2d3142 0%, #0a0b0e 100%); }
+
+  .app {
+    height: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto auto;
+    padding: 12px 20px 18px;
+    gap: 8px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header .title { color: var(--fg); font-weight: 700; }
+
+  /* Ribbon */
+  .blocks { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 2px; }
+  .blocks .b { height: 4px; background: rgba(255,255,255,0.18); border-radius: 2px; transition: all .3s; }
+  .blocks .b.done { background: rgba(255,255,255,0.95); }
+  .blocks .b.current { background: #fff; box-shadow: 0 0 16px rgba(255,255,255,0.7); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* Main */
+  .main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 6px 0;
+  }
+
+  .phase-label {
+    font-weight: 900;
+    font-size: clamp(46px, 13vw, 72px);
+    letter-spacing: 0.06em;
+    line-height: 0.95;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .phase-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .countdown {
+    font-weight: 800;
+    font-size: clamp(100px, 28vw, 160px);
+    line-height: 0.85;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    text-shadow: 0 4px 32px rgba(0,0,0,0.25);
+  }
+  .countdown.flash { animation: flash 0.5s ease-out; }
+  @keyframes flash { 0% { transform: scale(1.12); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+
+  /* HR pill */
+  .hr-row {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .hr-value {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .hr-value.disconnected { color: rgba(255,255,255,0.25); }
+  .hr-value.zone-good { color: var(--zone-good); }
+  .hr-value.zone-low { color: var(--zone-low); }
+  .hr-value.zone-high { color: var(--zone-high); }
+  .hr-unit { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+
+  .block-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 14px;
+    color: rgba(255,255,255,0.8);
+  }
+  .block-info .sep { opacity: 0.4; margin: 0 6px; }
+
+  /* Total bar */
+  .total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  .total .val { color: var(--fg); font-weight: 700; }
+
+  /* Buttons */
+  .controls { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  button {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 12px;
+    padding: 18px 12px;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    color: #0a0b0e;
+    background: #fff;
+  }
+  button.secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+  button.tertiary {
+    background: rgba(255,255,255,0.08); color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    font-size: 13px; padding: 12px;
+  }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Connect strip */
+  .connect-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .connect-strip .status { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+  .dot.live { background: #76ff7a; box-shadow: 0 0 10px var(--zone-good); animation: pulse 1.2s ease-in-out infinite; }
+  .connect-strip .ble-btn {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border: none; border-radius: 6px;
+    padding: 8px 12px; font-size: 11px;
+    letter-spacing: 0.14em; cursor: pointer;
+    font-family: inherit; text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  /* Report modal */
+  .report {
+    position: fixed; inset: 0;
+    background: #0a0b0e;
+    z-index: 100;
+    overflow-y: auto;
+    display: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .report.open { display: block; }
+  .report-inner {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 24px 20px 32px;
+  }
+  .report h1 {
+    font-weight: 900;
+    font-size: 42px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .report .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .report h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted);
+    margin: 24px 0 12px;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+  }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .stat .k { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .stat .v { font-weight: 800; font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .u { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+  table.blocks-table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.blocks-table th, table.blocks-table td {
+    padding: 9px 6px;
+    border-bottom: 1px solid var(--line);
+    text-align: right;
+  }
+  table.blocks-table th {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  table.blocks-table th:first-child, table.blocks-table td:first-child { text-align: left; }
+
+  .export-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; }
+  .close-row { margin-top: 16px; }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); color: #0a0b0e;
+    padding: 12px 20px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+    opacity: 0; transition: opacity 0.3s;
+    z-index: 200; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body class="state-ready">
+<div class="app">
+  <div class="header">
+    <div class="title">INTERVALADO · 8×1'/2'</div>
+    <div id="status">PRONTO</div>
+  </div>
+
+  <div class="blocks" id="blocks"></div>
+
+  <div class="main">
+    <div class="phase-label" id="phaseLabel">PRONTO</div>
+    <div class="phase-sub" id="phaseSub">Conecte a cinta e toque iniciar</div>
+    <div class="countdown" id="countdown">00:00</div>
+    <div class="hr-row">
+      <div class="hr-value disconnected" id="hrValue">--</div>
+      <div class="hr-unit">bpm</div>
+    </div>
+    <div class="block-info" id="blockInfo">8 × 1' forte <span class="sep">/</span> 2' leve</div>
+  </div>
+
+  <div class="connect-strip">
+    <div class="status">
+      <div class="dot" id="bleDot"></div>
+      <span id="bleStatus">Cinta desconectada</span>
+    </div>
+    <button class="ble-btn" id="bleBtn">Conectar</button>
+  </div>
+
+  <div class="total">
+    <div>Total <span class="val" id="totalTime">00:00</span> / 24:00</div>
+    <div>FC alvo 150–168 / &lt;140 · ↗↘⚠</div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">Iniciar</button>
+    <button id="resetBtn" class="secondary">Reiniciar</button>
+  </div>
+</div>
+
+<!-- Report modal -->
+<div class="report" id="report">
+  <div class="report-inner">
+    <h1>Treino Concluído</h1>
+    <div class="sub" id="reportSub">—</div>
+
+    <h2>Frequência Cardíaca</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">FC Média</div><div class="v"><span id="rHrAvg">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">FC Máxima</div><div class="v"><span id="rHrMax">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">Média Tiros</div><div class="v"><span id="rHardAvg">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">Média Recup.</div><div class="v"><span id="rEasyAvg">—</span><span class="u">bpm</span></div></div>
+    </div>
+
+    <h2>Zona Alvo</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Tiros na zona 150–168</div><div class="v"><span id="rZonePct">—</span><span class="u">%</span></div></div>
+      <div class="stat"><div class="k">Tempo na zona</div><div class="v" id="rZoneTime">—</div></div>
+    </div>
+
+    <h2>Bloco a Bloco</h2>
+    <table class="blocks-table">
+      <thead><tr><th>Bloco</th><th>Tiro avg</th><th>Pico</th><th>Recup final</th></tr></thead>
+      <tbody id="blocksTbody"></tbody>
+    </table>
+
+    <div class="export-row">
+      <button class="tertiary" id="copyBtn">Copiar resumo</button>
+      <button class="tertiary" id="csvBtn">Baixar CSV</button>
+      <button class="tertiary" id="jsonBtn">Baixar JSON</button>
+    </div>
+    <div class="close-row">
+      <button class="secondary" id="closeReportBtn" style="width:100%">Fechar relatório</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copiado</div>
+
+<script>
+'use strict';
+
+// =====================
+//  Workout config
+// =====================
+const WORKOUT = {
+  name: '8 × 1\' forte / 2\' leve',
+  hard: 60,
+  easy: 120,
+  blocks: 8,
+  prep: 5,
+  zoneHardLow: 150,
+  zoneHardHigh: 168,
+  zoneEasyMax: 140
+};
+const TOTAL = WORKOUT.blocks * (WORKOUT.hard + WORKOUT.easy);
+
+// HR alert thresholds (4 levels per phase)
+const HR_ALERT = {
+  hard: { low: 150, high: 168, veryHigh: 175 },
+  easy: { high: 140, veryHigh: 155 }
+};
+const HR_GRACE_MS = 10000;        // no alerts in first 10s of a phase (HR lag)
+const HR_PERSIST_RE_MS = 15000;   // re-alert if stuck in 'veryHigh' this long
+const HR_TAIL_GUARD_SEC = 3;      // no HR alerts in last N seconds of phase (countdown reserved)
+
+// =====================
+//  State
+// =====================
+let phase = 'idle';           // idle | prep | hard | easy | finished
+let block = 0;
+let phaseRemaining = 0;
+let elapsed = 0;
+let intervalId = null;
+let lastTick = null;
+let wakeLock = null;
+let audioCtx = null;
+let startedAt = null;
+
+// BLE
+let bleDevice = null;
+let bleChar = null;
+let currentBpm = null;
+let lastBpmAt = 0;
+
+// HR alerts
+let lastHrZone = null;    // 'good' | 'low' | 'high' | 'veryHigh' | null
+let lastHrAlertAt = 0;
+let phaseStartedAt = 0;
+
+// Recording
+let samples = []; // {t, phase, block, bpm}
+
+// =====================
+//  DOM
+// =====================
+const $ = id => document.getElementById(id);
+const body = document.body;
+const els = {
+  phaseLabel: $('phaseLabel'), phaseSub: $('phaseSub'),
+  countdown: $('countdown'), blockInfo: $('blockInfo'),
+  totalTime: $('totalTime'), status: $('status'),
+  startBtn: $('startBtn'), resetBtn: $('resetBtn'),
+  blocks: $('blocks'), hrValue: $('hrValue'),
+  bleDot: $('bleDot'), bleStatus: $('bleStatus'), bleBtn: $('bleBtn'),
+  report: $('report'), toast: $('toast'),
+  reportSub: $('reportSub'), rHrAvg: $('rHrAvg'), rHrMax: $('rHrMax'),
+  rHardAvg: $('rHardAvg'), rEasyAvg: $('rEasyAvg'),
+  rZonePct: $('rZonePct'), rZoneTime: $('rZoneTime'),
+  blocksTbody: $('blocksTbody'),
+  copyBtn: $('copyBtn'), csvBtn: $('csvBtn'), jsonBtn: $('jsonBtn'),
+  closeReportBtn: $('closeReportBtn')
+};
+
+for (let i = 0; i < WORKOUT.blocks; i++) {
+  const d = document.createElement('div');
+  d.className = 'b'; d.id = `b-${i}`;
+  els.blocks.appendChild(d);
+}
+
+// =====================
+//  Audio
+// =====================
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, vol = 0.5, type = 'sine', delay = 0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.05);
+}
+function vib(p) { if (navigator.vibrate) navigator.vibrate(p); }
+function alertHard() {
+  tone(900, 0.12, 0.55, 'square', 0);
+  tone(900, 0.12, 0.55, 'square', 0.18);
+  tone(1400, 0.45, 0.65, 'square', 0.36);
+  vib([180, 80, 180, 80, 400]);
+}
+function alertEasy() {
+  tone(520, 0.25, 0.5, 'sine', 0);
+  tone(390, 0.4, 0.5, 'sine', 0.25);
+  vib([250, 120, 250]);
+}
+function alertFinish() {
+  tone(700, 0.18, 0.55, 'triangle', 0);
+  tone(900, 0.18, 0.55, 'triangle', 0.2);
+  tone(1100, 0.18, 0.55, 'triangle', 0.4);
+  tone(1400, 0.7, 0.65, 'triangle', 0.6);
+  vib([200, 80, 200, 80, 200, 80, 600]);
+}
+function tick3() { tone(700, 0.08, 0.4, 'sine'); }
+
+// HR alert sounds (distinct from phase transitions)
+function alertHrLow() {
+  // Ascending: "speed up"
+  tone(620, 0.09, 0.4, 'triangle', 0);
+  tone(920, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrHigh() {
+  // Descending: "ease off"
+  tone(920, 0.09, 0.4, 'triangle', 0);
+  tone(620, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrVeryHigh() {
+  // 3 low pulses: "brake now"
+  tone(680, 0.1, 0.45, 'sawtooth', 0);
+  tone(500, 0.1, 0.45, 'sawtooth', 0.13);
+  tone(360, 0.25, 0.5, 'sawtooth', 0.26);
+  vib([120, 60, 120, 60, 240]);
+}
+
+// =====================
+//  Wake Lock
+// =====================
+async function acquireWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && phase !== 'idle' && phase !== 'finished') acquireWakeLock();
+});
+
+// =====================
+//  Bluetooth Heart Rate
+// =====================
+async function connectBLE() {
+  if (!('bluetooth' in navigator)) {
+    showToast('Web Bluetooth indisponível');
+    return;
+  }
+  try {
+    els.bleBtn.disabled = true; els.bleStatus.textContent = 'Procurando...';
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['heart_rate'] }],
+      optionalServices: ['battery_service']
+    });
+    els.bleStatus.textContent = `Conectando ${bleDevice.name || ''}...`;
+    bleDevice.addEventListener('gattserverdisconnected', onBleDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService('heart_rate');
+    bleChar = await service.getCharacteristic('heart_rate_measurement');
+    await bleChar.startNotifications();
+    bleChar.addEventListener('characteristicvaluechanged', onHrChange);
+    els.bleStatus.textContent = bleDevice.name || 'Cinta conectada';
+    els.bleDot.classList.add('live');
+    els.bleBtn.textContent = 'Desconectar';
+    els.bleBtn.disabled = false;
+  } catch (e) {
+    els.bleStatus.textContent = 'Falha: ' + (e.message || 'erro');
+    els.bleBtn.disabled = false;
+    bleDevice = null; bleChar = null;
+  }
+}
+function disconnectBLE() {
+  try { if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); } catch (e) {}
+  onBleDisconnect();
+}
+function onBleDisconnect() {
+  bleChar = null; bleDevice = null; currentBpm = null;
+  els.bleStatus.textContent = 'Cinta desconectada';
+  els.bleDot.classList.remove('live');
+  els.bleBtn.textContent = 'Conectar';
+  renderHr();
+}
+function onHrChange(e) {
+  const v = e.target.value;
+  const flags = v.getUint8(0);
+  const is16 = flags & 0x01;
+  currentBpm = is16 ? v.getUint16(1, true) : v.getUint8(1);
+  lastBpmAt = Date.now();
+  renderHr();
+  checkHrAlerts();
+}
+
+// =====================
+//  HR zone classification + alert dispatch
+// =====================
+function classifyHr(bpm, ph) {
+  if (bpm == null) return null;
+  if (ph === 'hard') {
+    const z = HR_ALERT.hard;
+    if (bpm < z.low) return 'low';
+    if (bpm > z.veryHigh) return 'veryHigh';
+    if (bpm > z.high) return 'high';
+    return 'good';
+  }
+  if (ph === 'easy') {
+    const z = HR_ALERT.easy;
+    if (bpm > z.veryHigh) return 'veryHigh';
+    if (bpm > z.high) return 'high';
+    return 'good';
+  }
+  return null;
+}
+function checkHrAlerts() {
+  if (currentBpm == null) return;
+  if (phase !== 'hard' && phase !== 'easy') return;
+  // Stale reading guard
+  if (Date.now() - lastBpmAt > 5000) return;
+  // Grace period at start of phase
+  if (Date.now() - phaseStartedAt < HR_GRACE_MS) return;
+  // Reserve last seconds for transition countdown
+  if (phaseRemaining <= HR_TAIL_GUARD_SEC) return;
+
+  const zone = classifyHr(currentBpm, phase);
+  const now = Date.now();
+
+  if (zone !== lastHrZone) {
+    // Zone transition — fire matching alert (good = silence)
+    if (zone === 'low' && phase === 'hard') alertHrLow();
+    else if (zone === 'high') alertHrHigh();
+    else if (zone === 'veryHigh') alertHrVeryHigh();
+    lastHrZone = zone;
+    lastHrAlertAt = now;
+  } else if (zone === 'veryHigh' && now - lastHrAlertAt > HR_PERSIST_RE_MS) {
+    // Persistent re-alert for extreme zone
+    alertHrVeryHigh();
+    lastHrAlertAt = now;
+  }
+}
+
+// =====================
+//  Render
+// =====================
+function fmt(s) {
+  s = Math.max(0, Math.round(s));
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+function fmtClock(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function setBodyState(s) { body.className = 'state-' + s; }
+function flashCountdown() {
+  els.countdown.classList.remove('flash'); void els.countdown.offsetWidth; els.countdown.classList.add('flash');
+}
+function renderHr() {
+  const v = els.hrValue;
+  if (currentBpm == null) {
+    v.textContent = '--'; v.className = 'hr-value disconnected'; return;
+  }
+  v.textContent = currentBpm;
+  v.className = 'hr-value';
+  if (phase === 'hard') {
+    if (currentBpm < WORKOUT.zoneHardLow) v.classList.add('zone-low');
+    else if (currentBpm > WORKOUT.zoneHardHigh) v.classList.add('zone-high');
+    else v.classList.add('zone-good');
+  } else if (phase === 'easy') {
+    if (currentBpm <= WORKOUT.zoneEasyMax) v.classList.add('zone-good');
+    else v.classList.add('zone-low');
+  }
+}
+function render() {
+  els.countdown.textContent = fmt(phaseRemaining);
+  els.totalTime.textContent = fmt(elapsed);
+  for (let i = 0; i < WORKOUT.blocks; i++) {
+    const el = $(`b-${i}`); el.className = 'b';
+    if (phase === 'finished') { el.classList.add('done'); continue; }
+    if (i < block) el.classList.add('done');
+    else if (i === block && (phase === 'hard' || phase === 'easy')) el.classList.add('current');
+  }
+  if (phase === 'idle') {
+    setBodyState('ready');
+    els.phaseLabel.textContent = 'PRONTO';
+    els.phaseSub.textContent = 'Conecte a cinta e toque iniciar';
+    els.blockInfo.innerHTML = `8 × 1' forte <span class="sep">/</span> 2' leve`;
+    els.status.textContent = 'PRONTO';
+    els.startBtn.textContent = 'Iniciar';
+  } else if (phase === 'prep') {
+    setBodyState('ready');
+    els.phaseLabel.textContent = 'PREPARE-SE';
+    els.phaseSub.textContent = 'Primeiro tiro em instantes';
+    els.blockInfo.innerHTML = `Bloco 1 <span class="sep">/</span> ${WORKOUT.blocks}`;
+    els.status.textContent = 'PREP';
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (phase === 'hard') {
+    setBodyState('hard');
+    els.phaseLabel.textContent = 'FORTE';
+    els.phaseSub.textContent = 'Esforço 7–8/10 · firme, controlado';
+    els.blockInfo.innerHTML = `Bloco ${block+1} <span class="sep">/</span> ${WORKOUT.blocks}`;
+    els.status.textContent = `BLOCO ${block+1}/${WORKOUT.blocks}`;
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (phase === 'easy') {
+    setBodyState('easy');
+    els.phaseLabel.textContent = 'LEVE';
+    els.phaseSub.textContent = 'Trote leve · respiração baixando';
+    els.blockInfo.innerHTML = `Recup. · próximo bloco ${block+2 <= WORKOUT.blocks ? block+2 : WORKOUT.blocks}`;
+    els.status.textContent = `RECUP ${block+1}/${WORKOUT.blocks}`;
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (phase === 'finished') {
+    setBodyState('finished');
+    els.phaseLabel.textContent = 'FIM';
+    els.phaseSub.textContent = 'Treino concluído';
+    els.blockInfo.innerHTML = `8 tiros completados`;
+    els.status.textContent = 'COMPLETO';
+    els.startBtn.textContent = 'Iniciar';
+  }
+  renderHr();
+}
+
+// =====================
+//  Phase machine
+// =====================
+function enterPrep() { phase = 'prep'; phaseRemaining = WORKOUT.prep; phaseStartedAt = Date.now(); lastHrZone = null; flashCountdown(); tone(600, 0.1, 0.35); }
+function enterHard() { phase = 'hard'; phaseRemaining = WORKOUT.hard; phaseStartedAt = Date.now(); lastHrZone = null; alertHard(); flashCountdown(); }
+function enterEasy() { phase = 'easy'; phaseRemaining = WORKOUT.easy; phaseStartedAt = Date.now(); lastHrZone = null; alertEasy(); flashCountdown(); }
+function enterFinished() {
+  phase = 'finished'; phaseRemaining = 0;
+  stopInterval(); alertFinish(); releaseWakeLock();
+  setTimeout(showReport, 600);
+}
+function advancePhase() {
+  if (phase === 'prep') enterHard();
+  else if (phase === 'hard') enterEasy();
+  else if (phase === 'easy') {
+    block++;
+    if (block >= WORKOUT.blocks) enterFinished();
+    else enterHard();
+  }
+}
+
+// =====================
+//  Loop + sampling
+// =====================
+let sampleAccumulator = 0;
+function loop() {
+  const now = performance.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+
+  const prev = phaseRemaining;
+  phaseRemaining -= dt;
+  if (phase === 'hard' || phase === 'easy') elapsed += dt;
+
+  // Record sample once per second during hard/easy
+  if (phase === 'hard' || phase === 'easy') {
+    sampleAccumulator += dt;
+    while (sampleAccumulator >= 1) {
+      sampleAccumulator -= 1;
+      // discard bpm if too old (>5s without reading)
+      const bpm = (currentBpm != null && Date.now() - lastBpmAt < 5000) ? currentBpm : null;
+      samples.push({
+        t: Math.round(elapsed),
+        phase: phase,
+        block: block + 1,
+        bpm: bpm
+      });
+    }
+  } else {
+    sampleAccumulator = 0;
+  }
+
+  // Countdown beeps
+  if (phase !== 'idle' && phase !== 'finished') {
+    const ps = Math.ceil(prev), ns = Math.ceil(phaseRemaining);
+    if (ps !== ns && (ns === 3 || ns === 2 || ns === 1)) tick3();
+  }
+
+  if (phaseRemaining <= 0) advancePhase();
+  render();
+}
+function startInterval() { lastTick = performance.now(); intervalId = setInterval(loop, 100); }
+function stopInterval() { if (intervalId) { clearInterval(intervalId); intervalId = null; } }
+
+// =====================
+//  Report
+// =====================
+function computeReport() {
+  const valid = samples.filter(s => s.bpm != null);
+  const hard = valid.filter(s => s.phase === 'hard');
+  const easy = valid.filter(s => s.phase === 'easy');
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b) => a+b.bpm, 0) / arr.length) : null;
+  const max = arr => arr.length ? Math.max(...arr.map(s => s.bpm)) : null;
+  const min = arr => arr.length ? Math.min(...arr.map(s => s.bpm)) : null;
+  const inZone = hard.filter(s => s.bpm >= WORKOUT.zoneHardLow && s.bpm <= WORKOUT.zoneHardHigh);
+
+  const perBlock = [];
+  for (let i = 1; i <= WORKOUT.blocks; i++) {
+    const bHard = valid.filter(s => s.block === i && s.phase === 'hard');
+    const bEasy = valid.filter(s => s.block === i && s.phase === 'easy');
+    const recoveryEnd = bEasy.length ? bEasy.slice(-5) : []; // last 5s
+    const recAvg = recoveryEnd.length ? Math.round(recoveryEnd.reduce((a,b)=>a+b.bpm,0)/recoveryEnd.length) : null;
+    perBlock.push({
+      block: i,
+      hardAvg: avg(bHard),
+      hardMax: max(bHard),
+      easyAvg: avg(bEasy),
+      easyMin: min(bEasy),
+      recoveryEnd: recAvg
+    });
+  }
+
+  return {
+    workout: WORKOUT.name,
+    startedAt: startedAt ? fmtClock(new Date(startedAt)) : '—',
+    duration: fmt(elapsed),
+    totalSamples: samples.length,
+    validSamples: valid.length,
+    hrAvg: avg(valid),
+    hrMax: max(valid),
+    hrMin: min(valid),
+    hardAvg: avg(hard),
+    hardMax: max(hard),
+    easyAvg: avg(easy),
+    zonePct: hard.length ? Math.round((inZone.length / hard.length) * 100) : null,
+    zoneTime: fmt(inZone.length),
+    perBlock
+  };
+}
+function showReport() {
+  const r = computeReport();
+  els.reportSub.textContent = `${r.workout} · ${r.startedAt} · ${r.duration}`;
+  els.rHrAvg.textContent = r.hrAvg ?? '—';
+  els.rHrMax.textContent = r.hrMax ?? '—';
+  els.rHardAvg.textContent = r.hardAvg ?? '—';
+  els.rEasyAvg.textContent = r.easyAvg ?? '—';
+  els.rZonePct.textContent = r.zonePct ?? '—';
+  els.rZoneTime.textContent = r.zoneTime;
+  els.blocksTbody.innerHTML = r.perBlock.map(b =>
+    `<tr><td>${b.block}</td><td>${b.hardAvg ?? '—'}</td><td>${b.hardMax ?? '—'}</td><td>${b.recoveryEnd ?? '—'}</td></tr>`
+  ).join('');
+  els.report.classList.add('open');
+}
+function hideReport() { els.report.classList.remove('open'); }
+
+function buildTextReport() {
+  const r = computeReport();
+  let s = '';
+  s += `🏃 RELATÓRIO DE TREINO\n`;
+  s += `${'='.repeat(28)}\n`;
+  s += `Treino: ${r.workout}\n`;
+  s += `Início: ${r.startedAt}\n`;
+  s += `Duração: ${r.duration}\n\n`;
+  s += `📊 FREQUÊNCIA CARDÍACA\n`;
+  s += `FC média geral: ${r.hrAvg ?? '—'} bpm\n`;
+  s += `FC máxima: ${r.hrMax ?? '—'} bpm\n`;
+  s += `FC mínima: ${r.hrMin ?? '—'} bpm\n`;
+  s += `Média nos tiros: ${r.hardAvg ?? '—'} bpm\n`;
+  s += `Média na recuperação: ${r.easyAvg ?? '—'} bpm\n\n`;
+  s += `🎯 ZONA ALVO (${WORKOUT.zoneHardLow}–${WORKOUT.zoneHardHigh} bpm)\n`;
+  s += `Tempo em zona nos tiros: ${r.zoneTime} (${r.zonePct ?? '—'}%)\n\n`;
+  s += `📈 BLOCO A BLOCO\n`;
+  s += `Bloco | Tiro avg | Pico | Recup final\n`;
+  for (const b of r.perBlock) {
+    s += `  ${b.block}   |   ${String(b.hardAvg ?? '—').padStart(3)}    | ${String(b.hardMax ?? '—').padStart(3)}  |    ${String(b.recoveryEnd ?? '—').padStart(3)}\n`;
+  }
+  s += `\nAmostras: ${r.validSamples}/${r.totalSamples} válidas`;
+  return s;
+}
+function buildCSV() {
+  let csv = 't_seg,fase,bloco,bpm\n';
+  for (const s of samples) csv += `${s.t},${s.phase},${s.block},${s.bpm ?? ''}\n`;
+  return csv;
+}
+function buildJSON() {
+  return JSON.stringify({
+    workout: WORKOUT,
+    startedAt: startedAt,
+    finishedAt: Date.now(),
+    duration_seconds: Math.round(elapsed),
+    samples: samples,
+    summary: computeReport()
+  }, null, 2);
+}
+function download(filename, content, mime = 'text/plain') {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+function showToast(msg) {
+  els.toast.textContent = msg;
+  els.toast.classList.add('show');
+  setTimeout(() => els.toast.classList.remove('show'), 1800);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast('Copiado'); }
+  catch (e) { showToast('Erro ao copiar'); }
+}
+
+// =====================
+//  Events
+// =====================
+els.bleBtn.addEventListener('click', () => {
+  if (bleDevice && bleDevice.gatt.connected) disconnectBLE();
+  else connectBLE();
+});
+els.startBtn.addEventListener('click', () => {
+  initAudio();
+  if (phase === 'idle' || phase === 'finished') {
+    block = 0; elapsed = 0; samples = []; startedAt = Date.now();
+    enterPrep(); acquireWakeLock(); startInterval();
+  } else if (intervalId) {
+    stopInterval();
+  } else {
+    startInterval(); acquireWakeLock();
+  }
+  render();
+});
+els.resetBtn.addEventListener('click', () => {
+  if (phase !== 'idle' && !confirm('Reiniciar o treino?')) return;
+  stopInterval(); releaseWakeLock();
+  phase = 'idle'; block = 0; phaseRemaining = 0; elapsed = 0; samples = [];
+  render();
+});
+els.copyBtn.addEventListener('click', () => copyText(buildTextReport()));
+els.csvBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`treino_8x1-2_${ts}.csv`, buildCSV(), 'text/csv');
+});
+els.jsonBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`treino_8x1-2_${ts}.json`, buildJSON(), 'application/json');
+});
+els.closeReportBtn.addEventListener('click', hideReport);
+
+render();
+</script>
+</body>
+</html>
