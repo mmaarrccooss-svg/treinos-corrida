@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0e">
+<title>Rodagem Serra v3 · FC + GPS + Pace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+  :root {
+    --bg: #0a0b0e;
+    --fg: #f5f5f5;
+    --muted: rgba(255,255,255,0.55);
+    --line: rgba(255,255,255,0.12);
+    --zone-good: #76ff7a;
+    --zone-low: #ffd166;
+    --zone-high: #ff5252;
+  }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Barlow Condensed', sans-serif;
+    background: var(--bg); color: var(--fg);
+    transition: background 0.5s ease;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  body.state-ready { background: linear-gradient(160deg, #2d3142 0%, #0a0b0e 100%); }
+  body.state-prep { background: linear-gradient(160deg, #f4a261 0%, #b86a2a 100%); }
+  body.state-warmup { background: linear-gradient(160deg, #f4a261 0%, #b86a2a 100%); }
+  body.state-main { background: linear-gradient(160deg, #3a86ff 0%, #1e3a8a 100%); }
+  body.state-cooldown { background: linear-gradient(160deg, #52796f 0%, #2f3e46 100%); }
+  body.state-finished { background: linear-gradient(160deg, #2d3142 0%, #0a0b0e 100%); }
+
+  .app {
+    height: 100%; max-width: 520px; margin: 0 auto;
+    display: grid; grid-template-rows: auto auto 1fr auto auto auto auto;
+    padding: 12px 20px 18px; gap: 6px;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header .title { color: var(--fg); font-weight: 700; }
+
+  /* Phases progress bar */
+  .phases-bar {
+    display: grid; gap: 4px; margin-top: 2px;
+    height: 6px;
+  }
+  .phases-bar .seg {
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px;
+    position: relative; overflow: hidden;
+    transition: background 0.3s;
+  }
+  .phases-bar .seg .fill {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.95);
+    transform-origin: left; transform: scaleX(0);
+    transition: transform 0.3s linear;
+  }
+  .phases-bar .seg.current {
+    box-shadow: 0 0 14px rgba(255,255,255,0.5);
+  }
+  .phase-labels {
+    display: grid; gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .phase-labels span { text-align: center; }
+  .phase-labels span.current { color: var(--fg); font-weight: 700; }
+
+  .main {
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center; padding: 6px 0;
+  }
+  .phase-label {
+    font-weight: 900;
+    font-size: clamp(40px, 12vw, 64px);
+    letter-spacing: 0.06em; line-height: 0.95;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .phase-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+    max-width: 90%; line-height: 1.5;
+  }
+  .countdown {
+    font-weight: 800;
+    font-size: clamp(90px, 26vw, 150px);
+    line-height: 0.85; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em; text-shadow: 0 4px 32px rgba(0,0,0,0.25);
+  }
+  .countdown.flash { animation: flash 0.5s ease-out; }
+  @keyframes flash { 0% { transform: scale(1.12); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+
+  .hr-row {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-top: 14px; font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .hr-value {
+    font-size: 50px; font-weight: 700; line-height: 1;
+    transition: color 0.3s;
+  }
+  .hr-value.disconnected { color: rgba(255,255,255,0.25); }
+  .hr-value.zone-good { color: var(--zone-good); }
+  .hr-value.zone-low { color: var(--zone-low); }
+  .hr-value.zone-high { color: var(--zone-high); }
+  .hr-unit { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .hr-zone {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 6px;
+    margin-left: 6px;
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.45);
+    transition: all 0.3s;
+  }
+  .hr-zone.zone-good { background: rgba(118,255,122,0.2); color: var(--zone-good); }
+  .hr-zone.zone-low { background: rgba(255,209,102,0.2); color: var(--zone-low); }
+  .hr-zone.zone-high { background: rgba(255,82,82,0.2); color: var(--zone-high); }
+
+  /* GPS-based live metrics (distance + pace) */
+  .metrics-row {
+    display: flex; justify-content: center; gap: 24px;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric { display: flex; align-items: baseline; gap: 6px; }
+  .metric-value {
+    font-size: 30px; font-weight: 700;
+    color: rgba(255,255,255,0.92);
+  }
+  .metric-value.dim { color: rgba(255,255,255,0.3); }
+  .metric-unit {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .dot.warn { background: var(--zone-low); box-shadow: 0 0 10px var(--zone-low); }
+
+  .zone-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    margin-top: 12px; color: rgba(255,255,255,0.8);
+    text-align: center; max-width: 90%;
+  }
+
+  .total {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--muted); padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  .total .val { color: var(--fg); font-weight: 700; }
+
+  .controls { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .controls.three { grid-template-columns: 1fr 1fr 1fr; }
+  button {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800; font-size: 18px; letter-spacing: 0.12em;
+    text-transform: uppercase; border: none; border-radius: 12px;
+    padding: 18px 8px; cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    color: #0a0b0e; background: #fff;
+  }
+  button.secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+  button.tertiary {
+    background: rgba(255,255,255,0.08); color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    font-size: 13px; padding: 12px;
+  }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .connect-strip {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .connect-strip .status { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+  .dot.live {
+    background: #76ff7a; box-shadow: 0 0 10px var(--zone-good);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .connect-strip .ble-btn {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border: none; border-radius: 6px; padding: 8px 12px;
+    font-size: 11px; letter-spacing: 0.14em; cursor: pointer;
+    font-family: inherit; text-transform: uppercase; font-weight: 700;
+  }
+
+  /* Report */
+  .report {
+    position: fixed; inset: 0; background: #0a0b0e;
+    z-index: 100; overflow-y: auto; display: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .report.open { display: block; }
+  .report-inner { max-width: 520px; margin: 0 auto; padding: 24px 20px 32px; }
+  .report h1 {
+    font-weight: 900; font-size: 38px; letter-spacing: 0.04em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .report .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 24px;
+  }
+  .report h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted); margin: 24px 0 12px;
+    border-top: 1px solid var(--line); padding-top: 18px;
+  }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px;
+  }
+  .stat .k { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .stat .v { font-weight: 800; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .u { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-left: 4px; }
+  table.phases-table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.phases-table th, table.phases-table td {
+    padding: 9px 4px; border-bottom: 1px solid var(--line);
+    text-align: right;
+  }
+  table.phases-table th {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  table.phases-table th:first-child, table.phases-table td:first-child { text-align: left; }
+  .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
+  .close-row { margin-top: 16px; }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); color: #0a0b0e;
+    padding: 12px 20px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+    opacity: 0; transition: opacity 0.3s;
+    z-index: 200; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body class="state-ready">
+<div class="app">
+  <div class="header">
+    <div class="title" id="appTitle">RODAGEM SERRA · 52min</div>
+    <div id="status">PRONTO</div>
+  </div>
+
+  <div>
+    <div class="phases-bar" id="phasesBar"></div>
+    <div class="phase-labels" id="phaseLabels"></div>
+  </div>
+
+  <div class="main">
+    <div class="phase-label" id="phaseLabel">PRONTO</div>
+    <div class="phase-sub" id="phaseSub">Conecte a cinta e toque iniciar</div>
+    <div class="countdown" id="countdown">52:00</div>
+    <div class="hr-row">
+      <div class="hr-value disconnected" id="hrValue">--</div>
+      <div class="hr-unit">bpm</div>
+      <div class="hr-zone" id="hrZone">—</div>
+    </div>
+    <div class="metrics-row">
+      <div class="metric">
+        <div class="metric-value dim" id="distValue">0.00</div>
+        <div class="metric-unit">km</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value dim" id="paceValue">—</div>
+        <div class="metric-unit">/km</div>
+      </div>
+    </div>
+    <div class="zone-info" id="zoneInfo">Rodagem contínua com subida controlada</div>
+  </div>
+
+  <div class="connect-strip">
+    <div class="status">
+      <div class="dot" id="bleDot"></div>
+      <span id="bleStatus">Cinta desconectada</span>
+    </div>
+    <button class="ble-btn" id="bleBtn">Conectar</button>
+  </div>
+
+  <div class="connect-strip">
+    <div class="status">
+      <div class="dot" id="gpsDot"></div>
+      <span id="gpsStatus">GPS desconectado</span>
+    </div>
+    <button class="ble-btn" id="gpsBtn">Conectar</button>
+  </div>
+
+  <div class="total">
+    <div>Total <span class="val" id="totalTime">00:00</span> / <span id="totalDuration">52:00</span></div>
+    <div>↗ ↘ ⚠ alertas FC</div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button id="startBtn">Iniciar</button>
+    <button id="resetBtn" class="secondary">Reiniciar</button>
+  </div>
+</div>
+
+<div class="report" id="report">
+  <div class="report-inner">
+    <h1>Treino Concluído</h1>
+    <div class="sub" id="reportSub">—</div>
+
+    <h2>Frequência Cardíaca · Geral</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">FC Média</div><div class="v"><span id="rHrAvg">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">FC Máxima</div><div class="v"><span id="rHrMax">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">FC Mínima</div><div class="v"><span id="rHrMin">—</span><span class="u">bpm</span></div></div>
+      <div class="stat"><div class="k">Duração</div><div class="v" id="rDuration">—</div></div>
+    </div>
+
+    <h2>Distância e Pace</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Distância total</div><div class="v"><span id="rDistance">—</span><span class="u">km</span></div></div>
+      <div class="stat"><div class="k">Pace médio</div><div class="v" id="rPaceAvg">—</div></div>
+      <div class="stat"><div class="k">Pace melhor</div><div class="v" id="rPaceBest">—</div></div>
+      <div class="stat"><div class="k">Ganho alt. (cru)</div><div class="v"><span id="rAltGain">—</span><span class="u">m</span></div></div>
+    </div>
+
+    <h2>Por Fase</h2>
+    <table class="phases-table">
+      <thead><tr><th>Fase</th><th>Tempo</th><th>FC avg</th><th>FC max</th><th>Pace</th><th>Dist</th></tr></thead>
+      <tbody id="phasesTbody"></tbody>
+    </table>
+
+    <h2>Picos na Rodagem</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Tempo &gt;165 bpm</div><div class="v" id="rPeakTime">—</div></div>
+      <div class="stat"><div class="k">Picos isolados</div><div class="v" id="rPeakCount">—</div></div>
+    </div>
+
+    <div class="export-row">
+      <button class="tertiary" id="copyBtn">Copiar resumo</button>
+      <button class="tertiary" id="mdBtn">Copiar MD (ChatGPT)</button>
+      <button class="tertiary" id="csvBtn">Baixar CSV</button>
+      <button class="tertiary" id="jsonBtn">Baixar JSON</button>
+    </div>
+    <div class="close-row">
+      <button class="secondary" id="closeReportBtn" style="width:100%">Fechar relatório</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copiado</div>
+
+<script>
+'use strict';
+
+// =====================
+//  URL params (modo simulação)
+// =====================
+const URL_PARAMS = new URLSearchParams(location.search);
+const SIM_MODE = URL_PARAMS.get('sim') === '1';
+
+// =====================
+//  Workout config
+// =====================
+const WORKOUT = {
+  name: 'Rodagem Serra · 52min',
+  shortName: 'RODAGEM SERRA',
+  prep: 5,
+  phases: [
+    {
+      key: 'warmup',
+      name: 'AQUECIMENTO',
+      shortLabel: 'AQ 10\'',
+      duration: 600,
+      subtitle: 'Trote leve · 7:50–8:40/km · soltar pernas',
+      zoneLabel: 'Alvo 115–135 bpm',
+      zones: { lowAlert: 115, lowOK: 115, highOK: 135, highAlert: 145, veryHighAlert: 155 }
+    },
+    {
+      key: 'main',
+      name: 'RODAGEM',
+      shortLabel: 'RODAGEM 35\'',
+      duration: 2100,
+      minDuration: 1800,    // botão Avançar habilita aos 30 min
+      maxDuration: 2400,
+      subtitle: 'Plano 6:50–7:20/km · controle nas subidas',
+      zoneLabel: 'Alvo 135–155 · até 165 em subidas',
+      zones: { lowAlert: 130, lowOK: 135, highOK: 165, highAlert: 168, veryHighAlert: 175 }
+    },
+    {
+      key: 'cooldown',
+      name: 'DESAQUECIMENTO',
+      shortLabel: 'DESAQ 7\'',
+      duration: 420,
+      subtitle: 'Caminhada ou trote muito leve · baixar FC',
+      zoneLabel: 'Baixando · alvo <140 bpm',
+      zones: { lowAlert: null, lowOK: 0, highOK: 140, highAlert: 148, veryHighAlert: 160 }
+    }
+  ]
+};
+
+// Apply sim overrides
+if (SIM_MODE) {
+  WORKOUT.name = 'TESTE · ciclo curto (35s)';
+  WORKOUT.prep = 3;
+  WORKOUT.phases[0].duration = 10; WORKOUT.phases[0].shortLabel = 'AQ 10s';
+  WORKOUT.phases[1].duration = 15; WORKOUT.phases[1].shortLabel = 'RODAGEM 15s';
+  WORKOUT.phases[1].minDuration = 8; WORKOUT.phases[1].maxDuration = 15;
+  WORKOUT.phases[2].duration = 10; WORKOUT.phases[2].shortLabel = 'DESAQ 10s';
+}
+
+const TOTAL = WORKOUT.phases.reduce((s, p) => s + p.duration, 0);
+let HR_GRACE_MS = SIM_MODE ? 2000 : 5000;
+const HR_OFFZONE_RE_MS = SIM_MODE ? 2000 : 5000;
+const HR_TAIL_GUARD_SEC = SIM_MODE ? 1 : 3;
+
+// =====================
+//  State
+// =====================
+let mode = 'idle';            // idle | prep | running | finished
+let phaseIdx = -1;            // 0..phases.length-1 quando running
+let phasePos = 0;             // segundos decorridos na fase atual
+let prepRemaining = 0;
+let totalElapsed = 0;
+let intervalId = null;
+let lastTick = null;
+let wakeLock = null;
+let audioCtx = null;
+let startedAt = null;
+
+let bleDevice = null;
+let bleChar = null;
+let currentBpm = null;
+let lastBpmAt = 0;
+
+// GPS
+let gpsWatchId = null;
+let lastValidPos = null;       // último GeolocationCoordinates aceito
+let totalDistance = 0;          // metros acumulados
+let totalAltGain = 0;           // metros acumulados (subida)
+let lastAltSmoothed = null;     // suavização simples de altitude
+let gpsHistory = [];            // janela rolante p/ pace (últimos 60s)
+let currentPace = null;         // segundos por km (rolling)
+let gpsState = 'idle';          // idle | searching | ok | weak | denied | unavailable | timeout
+let gpsAccuracy = null;
+
+let lastHrZone = null;
+let lastHrAlertAt = 0;
+let lastHrCheckAt = 0;
+let phaseStartedAt = 0;
+
+let samples = [];             // {t, phaseKey, bpm}
+
+// =====================
+//  DOM
+// =====================
+const $ = id => document.getElementById(id);
+const body = document.body;
+const els = {
+  phaseLabel: $('phaseLabel'), phaseSub: $('phaseSub'),
+  countdown: $('countdown'), zoneInfo: $('zoneInfo'),
+  totalTime: $('totalTime'), status: $('status'),
+  controls: $('controls'),
+  startBtn: $('startBtn'), resetBtn: $('resetBtn'),
+  phasesBar: $('phasesBar'), phaseLabels: $('phaseLabels'),
+  hrValue: $('hrValue'), hrZone: $('hrZone'),
+  distValue: $('distValue'), paceValue: $('paceValue'),
+  bleDot: $('bleDot'), bleStatus: $('bleStatus'), bleBtn: $('bleBtn'),
+  gpsDot: $('gpsDot'), gpsStatus: $('gpsStatus'), gpsBtn: $('gpsBtn'),
+  report: $('report'), toast: $('toast'),
+  reportSub: $('reportSub'),
+  rHrAvg: $('rHrAvg'), rHrMax: $('rHrMax'), rHrMin: $('rHrMin'), rDuration: $('rDuration'),
+  rDistance: $('rDistance'), rPaceAvg: $('rPaceAvg'), rPaceBest: $('rPaceBest'), rAltGain: $('rAltGain'),
+  phasesTbody: $('phasesTbody'),
+  rPeakTime: $('rPeakTime'), rPeakCount: $('rPeakCount'),
+  copyBtn: $('copyBtn'), mdBtn: $('mdBtn'), csvBtn: $('csvBtn'), jsonBtn: $('jsonBtn'),
+  closeReportBtn: $('closeReportBtn')
+};
+
+// Build phases bar
+(function buildPhasesBar() {
+  // Apply dynamic title and total duration based on current WORKOUT
+  const totMin = Math.round(TOTAL / 60);
+  const totalLabel = TOTAL < 60 ? `${TOTAL}s` : `${totMin}min`;
+  $('appTitle').textContent = SIM_MODE
+    ? `TESTE · ${TOTAL}s (modo simulação)`
+    : `${WORKOUT.shortName} · ${totalLabel}`;
+  $('totalDuration').textContent = fmt(TOTAL);
+
+  const grid = WORKOUT.phases.map(p => p.duration + 'fr').join(' ');
+  els.phasesBar.style.gridTemplateColumns = grid;
+  els.phaseLabels.style.gridTemplateColumns = grid;
+  WORKOUT.phases.forEach((p, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg'; seg.id = 'seg-' + i;
+    const fill = document.createElement('div');
+    fill.className = 'fill'; fill.id = 'fill-' + i;
+    seg.appendChild(fill);
+    els.phasesBar.appendChild(seg);
+
+    const lbl = document.createElement('span');
+    lbl.id = 'lbl-' + i;
+    lbl.textContent = p.shortLabel;
+    els.phaseLabels.appendChild(lbl);
+  });
+})();
+
+// =====================
+//  Audio
+// =====================
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, vol = 0.5, type = 'sine', delay = 0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.05);
+}
+function vib(p) { if (navigator.vibrate) navigator.vibrate(p); }
+
+// Phase entry sounds
+function alertWarmup() {
+  tone(520, 0.18, 0.5, 'sine', 0);
+  tone(720, 0.3, 0.55, 'sine', 0.2);
+  vib([200, 100, 250]);
+}
+function alertMain() {
+  tone(600, 0.12, 0.55, 'triangle', 0);
+  tone(800, 0.12, 0.55, 'triangle', 0.14);
+  tone(1000, 0.4, 0.6, 'triangle', 0.28);
+  vib([180, 80, 180, 80, 350]);
+}
+function alertCooldown() {
+  tone(700, 0.2, 0.5, 'sine', 0);
+  tone(500, 0.35, 0.5, 'sine', 0.22);
+  vib([220, 120, 300]);
+}
+function alertFinish() {
+  tone(700, 0.18, 0.55, 'triangle', 0);
+  tone(900, 0.18, 0.55, 'triangle', 0.2);
+  tone(1100, 0.18, 0.55, 'triangle', 0.4);
+  tone(1400, 0.7, 0.65, 'triangle', 0.6);
+  vib([200, 80, 200, 80, 200, 80, 600]);
+}
+function tick3() { tone(700, 0.08, 0.4, 'sine'); }
+
+// HR alerts
+function alertHrLow() {
+  tone(620, 0.09, 0.4, 'triangle', 0);
+  tone(920, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrHigh() {
+  tone(920, 0.09, 0.4, 'triangle', 0);
+  tone(620, 0.14, 0.45, 'triangle', 0.11);
+  vib([90, 50, 90]);
+}
+function alertHrVeryHigh() {
+  tone(680, 0.1, 0.45, 'sawtooth', 0);
+  tone(500, 0.1, 0.45, 'sawtooth', 0.13);
+  tone(360, 0.25, 0.5, 'sawtooth', 0.26);
+  vib([120, 60, 120, 60, 240]);
+}
+function alertHrGood() {
+  // Pleasant "in zone" chime — perfect fifth, plays once on entry
+  tone(880, 0.09, 0.35, 'sine', 0);
+  tone(1320, 0.18, 0.4, 'sine', 0.1);
+  vib([80]);
+}
+
+// =====================
+//  Wake Lock
+// =====================
+async function acquireWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && mode === 'running') acquireWakeLock();
+});
+
+// =====================
+//  Bluetooth
+// =====================
+async function connectBLE() {
+  if (!('bluetooth' in navigator)) { showToast('Web Bluetooth indisponível'); return; }
+  try {
+    els.bleBtn.disabled = true; els.bleStatus.textContent = 'Procurando...';
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['heart_rate'] }],
+      optionalServices: ['battery_service']
+    });
+    els.bleStatus.textContent = `Conectando ${bleDevice.name || ''}...`;
+    bleDevice.addEventListener('gattserverdisconnected', onBleDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService('heart_rate');
+    bleChar = await service.getCharacteristic('heart_rate_measurement');
+    await bleChar.startNotifications();
+    bleChar.addEventListener('characteristicvaluechanged', onHrChange);
+    els.bleStatus.textContent = bleDevice.name || 'Cinta conectada';
+    els.bleDot.classList.add('live');
+    els.bleBtn.textContent = 'Desconectar';
+    els.bleBtn.disabled = false;
+  } catch (e) {
+    els.bleStatus.textContent = 'Falha: ' + (e.message || 'erro');
+    els.bleBtn.disabled = false;
+    bleDevice = null; bleChar = null;
+  }
+}
+function disconnectBLE() {
+  try { if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); } catch (e) {}
+  onBleDisconnect();
+}
+function onBleDisconnect() {
+  bleChar = null; bleDevice = null; currentBpm = null;
+  els.bleStatus.textContent = 'Cinta desconectada';
+  els.bleDot.classList.remove('live');
+  els.bleBtn.textContent = 'Conectar';
+  renderHr();
+}
+function onHrChange(e) {
+  const v = e.target.value;
+  const flags = v.getUint8(0);
+  const is16 = flags & 0x01;
+  currentBpm = is16 ? v.getUint16(1, true) : v.getUint8(1);
+  lastBpmAt = Date.now();
+  renderHr();
+  checkHrAlerts();
+}
+
+// =====================
+//  GPS / Geolocation
+// =====================
+function haversine(p1, p2) {
+  const R = 6371000;
+  const φ1 = p1.latitude * Math.PI / 180;
+  const φ2 = p2.latitude * Math.PI / 180;
+  const Δφ = (p2.latitude - p1.latitude) * Math.PI / 180;
+  const Δλ = (p2.longitude - p1.longitude) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function startGPS() {
+  if (!('geolocation' in navigator)) { updateGpsStatus('unavailable'); return; }
+  if (gpsWatchId !== null) return;
+  updateGpsStatus('searching');
+  els.gpsBtn.textContent = 'Desconectar';
+  try {
+    gpsWatchId = navigator.geolocation.watchPosition(
+      onGPSUpdate, onGPSError,
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }
+    );
+  } catch (e) {
+    updateGpsStatus('unavailable');
+    els.gpsBtn.textContent = 'Conectar';
+  }
+}
+function stopGPS() {
+  if (gpsWatchId !== null) {
+    try { navigator.geolocation.clearWatch(gpsWatchId); } catch (e) {}
+    gpsWatchId = null;
+  }
+  els.gpsBtn.textContent = 'Conectar';
+  updateGpsStatus('idle');
+}
+function onGPSError(err) {
+  if (err.code === err.PERMISSION_DENIED) updateGpsStatus('denied');
+  else if (err.code === err.POSITION_UNAVAILABLE) updateGpsStatus('unavailable');
+  else if (err.code === err.TIMEOUT) updateGpsStatus('timeout');
+  else updateGpsStatus('unavailable');
+}
+function onGPSUpdate(pos) {
+  const acc = pos.coords.accuracy;
+  gpsAccuracy = acc;
+
+  // Filter low-accuracy fixes
+  if (acc > 50) { updateGpsStatus('weak', acc); lastValidPos = pos.coords; return; }
+
+  const cur = pos.coords;
+  let dist_inc = 0;
+
+  if (lastValidPos) {
+    const d = haversine(lastValidPos, cur);
+    // Filter jitter (parado) e teleportes
+    if (d >= 2 && d <= 50) dist_inc = d;
+  }
+
+  if (mode === 'running' && dist_inc > 0) {
+    totalDistance += dist_inc;
+    // Altitude gain (only counts positive deltas, suavizado)
+    if (cur.altitude != null) {
+      if (lastAltSmoothed == null) lastAltSmoothed = cur.altitude;
+      else {
+        // suavização simples (média ponderada)
+        const smoothed = lastAltSmoothed * 0.7 + cur.altitude * 0.3;
+        const delta = smoothed - lastAltSmoothed;
+        if (delta > 0.5) totalAltGain += delta; // só conta subidas > 0.5m
+        lastAltSmoothed = smoothed;
+      }
+    }
+    gpsHistory.push({
+      t: totalElapsed,
+      lat: cur.latitude, lng: cur.longitude,
+      alt: cur.altitude, acc: acc,
+      dist_inc: dist_inc, dist_total: totalDistance
+    });
+    // janela de 60s
+    gpsHistory = gpsHistory.filter(p => totalElapsed - p.t <= 60);
+    currentPace = calcRollingPace();
+  }
+
+  lastValidPos = cur;
+  updateGpsStatus('ok', acc);
+}
+function calcRollingPace() {
+  if (gpsHistory.length < 2) return null;
+  // Use últimos 30s, mas fallback p/ o que tiver
+  const now = totalElapsed;
+  const win = gpsHistory.filter(p => now - p.t <= 30);
+  const arr = win.length >= 2 ? win : gpsHistory;
+  let dist = 0;
+  for (let i = 1; i < arr.length; i++) dist += arr[i].dist_inc;
+  const time = arr[arr.length - 1].t - arr[0].t;
+  if (dist < 5 || time < 3) return null; // parado ou pouco dado
+  return (time / dist) * 1000; // seg/km
+}
+function updateGpsStatus(state, accuracy) {
+  gpsState = state;
+  els.gpsDot.classList.remove('live', 'warn');
+  let msg = '';
+  if (state === 'idle') msg = 'GPS desconectado';
+  else if (state === 'searching') msg = 'GPS procurando sinal...';
+  else if (state === 'ok') {
+    els.gpsDot.classList.add('live');
+    msg = `GPS ok · ±${Math.round(accuracy)}m`;
+  } else if (state === 'weak') {
+    els.gpsDot.classList.add('warn');
+    msg = `GPS sinal fraco · ±${Math.round(accuracy)}m`;
+  } else if (state === 'denied') msg = 'GPS: permissão negada';
+  else if (state === 'unavailable') msg = 'GPS indisponível';
+  else if (state === 'timeout') msg = 'GPS sem fix · aguardando';
+  els.gpsStatus.textContent = msg;
+}
+function fmtPace(secPerKm) {
+  if (secPerKm == null || !isFinite(secPerKm)) return '—';
+  if (secPerKm > 1800) return '>30:00';
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+// =====================
+//  HR zone classification
+// =====================
+function classifyHr(bpm, phase) {
+  if (bpm == null || !phase) return null;
+  const z = phase.zones;
+  if (z.lowAlert != null && bpm < z.lowAlert) return 'low';
+  if (bpm > z.veryHighAlert) return 'veryHigh';
+  if (bpm > z.highAlert) return 'high';
+  return 'good';
+}
+function getZoneClass(bpm, phase) {
+  // For HR pill color
+  if (bpm == null || !phase) return '';
+  const z = phase.zones;
+  if (bpm >= z.lowOK && bpm <= z.highOK) return 'zone-good';
+  if (z.lowAlert != null && bpm < z.lowAlert) return 'zone-low';
+  if (bpm > z.veryHighAlert) return 'zone-high';
+  if (bpm > z.highAlert) return 'zone-low';
+  return 'zone-good';
+}
+function checkHrAlerts() {
+  if (currentBpm == null) return;
+  if (mode !== 'running') return;
+  // Recover audio context if it was suspended (Android tab background, etc.)
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  if (Date.now() - lastBpmAt > 5000) return;
+  if (Date.now() - phaseStartedAt < HR_GRACE_MS) return;
+  const phase = WORKOUT.phases[phaseIdx];
+  if (!phase) return;
+  if ((phase.duration - phasePos) <= HR_TAIL_GUARD_SEC) return;
+
+  const zone = classifyHr(currentBpm, phase);
+  const now = Date.now();
+
+  if (zone !== lastHrZone) {
+    // Zone changed — fire the matching alert (good plays once on entry)
+    if (zone === 'low') alertHrLow();
+    else if (zone === 'high') alertHrHigh();
+    else if (zone === 'veryHigh') alertHrVeryHigh();
+    else if (zone === 'good') alertHrGood();
+    lastHrZone = zone;
+    lastHrAlertAt = now;
+  } else if (zone !== 'good' && now - lastHrAlertAt >= HR_OFFZONE_RE_MS) {
+    // Re-alert every 5s while off-zone (low, high, or veryHigh)
+    if (zone === 'low') alertHrLow();
+    else if (zone === 'high') alertHrHigh();
+    else if (zone === 'veryHigh') alertHrVeryHigh();
+    lastHrAlertAt = now;
+  }
+}
+
+// =====================
+//  Render
+// =====================
+function fmt(s) {
+  s = Math.max(0, Math.round(s));
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+function fmtClock(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function setBodyState(s) { body.className = 'state-' + s; }
+function flashCountdown() {
+  els.countdown.classList.remove('flash'); void els.countdown.offsetWidth; els.countdown.classList.add('flash');
+}
+function renderHr() {
+  const v = els.hrValue;
+  const z = els.hrZone;
+  if (currentBpm == null) {
+    v.textContent = '--'; v.className = 'hr-value disconnected';
+    z.textContent = '—'; z.className = 'hr-zone';
+    return;
+  }
+  v.textContent = currentBpm;
+  const phase = (mode === 'running') ? WORKOUT.phases[phaseIdx] : null;
+  const zoneClass = getZoneClass(currentBpm, phase);
+  v.className = 'hr-value ' + zoneClass;
+  // Zone label
+  if (!phase) {
+    z.textContent = '—'; z.className = 'hr-zone';
+  } else {
+    const cz = classifyHr(currentBpm, phase);
+    const labels = { low: 'BAIXA', good: 'IDEAL', high: 'ALTA', veryHigh: 'MUITO ALTA' };
+    z.textContent = labels[cz] || '—';
+    z.className = 'hr-zone ' + zoneClass;
+  }
+}
+function updateProgressBar() {
+  for (let i = 0; i < WORKOUT.phases.length; i++) {
+    const seg = $('seg-' + i);
+    const fill = $('fill-' + i);
+    const lbl = $('lbl-' + i);
+    seg.classList.toggle('current', mode === 'running' && i === phaseIdx);
+    lbl.classList.toggle('current', mode === 'running' && i === phaseIdx);
+    let pct = 0;
+    if (mode === 'finished') pct = 1;
+    else if (i < phaseIdx) pct = 1;
+    else if (i === phaseIdx) pct = Math.min(1, phasePos / WORKOUT.phases[i].duration);
+    fill.style.transform = `scaleX(${pct})`;
+  }
+}
+function updateControls() {
+  // Add a "Next phase" button on main after minDuration; remove otherwise.
+  const existing = $('nextBtn');
+  const phase = (mode === 'running') ? WORKOUT.phases[phaseIdx] : null;
+  const canAdvance = phase && phase.minDuration != null && phasePos >= phase.minDuration;
+  if (canAdvance && !existing) {
+    const btn = document.createElement('button');
+    btn.id = 'nextBtn'; btn.className = 'secondary'; btn.textContent = 'Avançar';
+    btn.addEventListener('click', advanceManually);
+    els.controls.insertBefore(btn, els.resetBtn);
+    els.controls.classList.add('three');
+  } else if (!canAdvance && existing) {
+    existing.remove();
+    els.controls.classList.remove('three');
+  }
+}
+function render() {
+  let displayRemaining = 0;
+  if (mode === 'idle' || mode === 'finished') displayRemaining = TOTAL - totalElapsed;
+  else if (mode === 'prep') displayRemaining = prepRemaining;
+  else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    displayRemaining = p ? (p.duration - phasePos) : 0;
+  }
+  els.countdown.textContent = fmt(displayRemaining);
+  els.totalTime.textContent = fmt(totalElapsed);
+  updateProgressBar();
+
+  if (mode === 'idle') {
+    setBodyState('ready');
+    els.phaseLabel.textContent = 'PRONTO';
+    els.phaseSub.textContent = 'Conecte a cinta e toque iniciar';
+    els.zoneInfo.textContent = 'Aquecimento · Rodagem · Desaquecimento';
+    els.status.textContent = 'PRONTO';
+    els.startBtn.textContent = 'Iniciar';
+  } else if (mode === 'prep') {
+    setBodyState('prep');
+    els.phaseLabel.textContent = 'PREPARE-SE';
+    els.phaseSub.textContent = 'Aquecimento em instantes';
+    els.zoneInfo.textContent = 'Coloque a cinta e dê play no Strava';
+    els.status.textContent = 'PREP';
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    setBodyState(p.key);
+    els.phaseLabel.textContent = p.name;
+    els.phaseSub.textContent = p.subtitle;
+    els.zoneInfo.textContent = p.zoneLabel;
+    els.status.textContent = p.shortLabel;
+    els.startBtn.textContent = intervalId ? 'Pausar' : 'Continuar';
+  } else if (mode === 'finished') {
+    setBodyState('finished');
+    els.phaseLabel.textContent = 'FIM';
+    els.phaseSub.textContent = 'Treino concluído · cansado mas inteiro';
+    els.zoneInfo.textContent = 'Hidratação · proteína · sono';
+    els.status.textContent = 'COMPLETO';
+    els.startBtn.textContent = 'Iniciar';
+  }
+  updateControls();
+  renderHr();
+  renderMetrics();
+}
+
+function renderMetrics() {
+  // Distância em km
+  const km = totalDistance / 1000;
+  els.distValue.textContent = km.toFixed(2);
+  els.distValue.classList.toggle('dim', totalDistance < 10);
+  // Pace
+  els.paceValue.textContent = fmtPace(currentPace);
+  els.paceValue.classList.toggle('dim', currentPace == null);
+}
+
+// =====================
+//  Phase machine
+// =====================
+function enterPrep() {
+  mode = 'prep'; prepRemaining = WORKOUT.prep;
+  phaseStartedAt = Date.now(); lastHrZone = null;
+  flashCountdown(); tone(600, 0.1, 0.35);
+}
+function enterPhase(idx) {
+  phaseIdx = idx; phasePos = 0;
+  phaseStartedAt = Date.now(); lastHrZone = null;
+  const p = WORKOUT.phases[idx];
+  if (p.key === 'warmup') alertWarmup();
+  else if (p.key === 'main') alertMain();
+  else if (p.key === 'cooldown') alertCooldown();
+  flashCountdown();
+}
+function finish() {
+  mode = 'finished';
+  stopInterval(); alertFinish(); releaseWakeLock();
+  // GPS fica conectado — usuário desconecta manualmente se quiser
+  setTimeout(showReport, 700);
+}
+function advanceManually() {
+  if (mode !== 'running') return;
+  const next = phaseIdx + 1;
+  if (next >= WORKOUT.phases.length) finish();
+  else enterPhase(next);
+  render();
+}
+
+// =====================
+//  Loop
+// =====================
+let sampleAccumulator = 0;
+function loop() {
+  const now = performance.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+
+  if (mode === 'prep') {
+    const prev = prepRemaining;
+    prepRemaining -= dt;
+    const ps = Math.ceil(prev), ns = Math.ceil(prepRemaining);
+    if (ps !== ns && (ns === 3 || ns === 2 || ns === 1)) tick3();
+    if (prepRemaining <= 0) {
+      mode = 'running';
+      enterPhase(0);
+    }
+  } else if (mode === 'running') {
+    const p = WORKOUT.phases[phaseIdx];
+    const prev = p.duration - phasePos;
+    phasePos += dt;
+    totalElapsed += dt;
+    const remaining = p.duration - phasePos;
+
+    // Sample once per second
+    sampleAccumulator += dt;
+    while (sampleAccumulator >= 1) {
+      sampleAccumulator -= 1;
+      const bpm = (currentBpm != null && Date.now() - lastBpmAt < 5000) ? currentBpm : null;
+      samples.push({
+        t: Math.round(totalElapsed),
+        phase: p.key,
+        bpm: bpm,
+        dist: Math.round(totalDistance),       // metros acumulados
+        pace: currentPace,                      // seg/km suavizado
+        alt: lastValidPos && lastValidPos.altitude != null ? Math.round(lastValidPos.altitude) : null,
+        acc: gpsAccuracy != null ? Math.round(gpsAccuracy) : null
+      });
+    }
+
+    // 3-2-1 countdown beeps (only if phase will end naturally — i.e. not in main waiting for manual)
+    const ps = Math.ceil(prev), ns = Math.ceil(remaining);
+    if (ps !== ns && (ns === 3 || ns === 2 || ns === 1)) tick3();
+
+    if (remaining <= 0) {
+      const next = phaseIdx + 1;
+      if (next >= WORKOUT.phases.length) finish();
+      else enterPhase(next);
+    }
+
+    // Periodic HR alert check (independent of BLE notification rate)
+    if (Date.now() - lastHrCheckAt >= 500) {
+      lastHrCheckAt = Date.now();
+      checkHrAlerts();
+    }
+  }
+  render();
+}
+function startInterval() { lastTick = performance.now(); intervalId = setInterval(loop, 100); }
+function stopInterval() { if (intervalId) { clearInterval(intervalId); intervalId = null; } }
+
+// =====================
+//  Report
+// =====================
+function computeReport() {
+  const valid = samples.filter(s => s.bpm != null);
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b) => a+b.bpm, 0) / arr.length) : null;
+  const max = arr => arr.length ? Math.max(...arr.map(s => s.bpm)) : null;
+  const min = arr => arr.length ? Math.min(...arr.map(s => s.bpm)) : null;
+
+  const perPhase = WORKOUT.phases.map(p => {
+    const all = samples.filter(s => s.phase === p.key);
+    const inPhase = valid.filter(s => s.phase === p.key);
+    const z = p.zones;
+    const inZone = inPhase.filter(s => s.bpm >= z.lowOK && s.bpm <= z.highOK);
+
+    // distância e pace da fase (a partir dos samples com dist)
+    const withDist = all.filter(s => s.dist != null);
+    let phaseDist = 0, phasePace = null;
+    if (withDist.length >= 2) {
+      phaseDist = withDist[withDist.length - 1].dist - withDist[0].dist;
+      const phaseTime = withDist[withDist.length - 1].t - withDist[0].t;
+      if (phaseDist > 50 && phaseTime > 5) phasePace = (phaseTime / phaseDist) * 1000;
+    }
+    return {
+      key: p.key, name: p.name,
+      duration: all.length,
+      avg: avg(inPhase), max: max(inPhase), min: min(inPhase),
+      zonePct: inPhase.length ? Math.round((inZone.length / inPhase.length) * 100) : null,
+      dist: phaseDist, pace: phasePace
+    };
+  });
+
+  // Picos na rodagem
+  const mainSamples = valid.filter(s => s.phase === 'main');
+  const peakSamples = mainSamples.filter(s => s.bpm > 165);
+  let peakCount = 0, inPeak = false;
+  for (const s of mainSamples) {
+    if (s.bpm > 165 && !inPeak) { peakCount++; inPeak = true; }
+    else if (s.bpm <= 165) inPeak = false;
+  }
+
+  // Pace overall e melhor pace (rolling minute)
+  const paceSamples = samples.filter(s => s.pace != null && isFinite(s.pace));
+  const paceAvgOverall = paceSamples.length
+    ? paceSamples.reduce((a,b) => a + b.pace, 0) / paceSamples.length : null;
+  const paceBest = paceSamples.length
+    ? Math.min(...paceSamples.map(s => s.pace)) : null;
+
+  return {
+    workout: WORKOUT.name,
+    startedAt: startedAt ? fmtClock(new Date(startedAt)) : '—',
+    duration: fmt(totalElapsed),
+    totalSamples: samples.length,
+    validSamples: valid.length,
+    hrAvg: avg(valid), hrMax: max(valid), hrMin: min(valid),
+    perPhase,
+    peakTime: fmt(peakSamples.length),
+    peakCount,
+    totalDistance, totalAltGain,
+    paceAvgOverall, paceBest
+  };
+}
+function showReport() {
+  const r = computeReport();
+  els.reportSub.textContent = `${r.workout} · ${r.startedAt}`;
+  els.rHrAvg.textContent = r.hrAvg ?? '—';
+  els.rHrMax.textContent = r.hrMax ?? '—';
+  els.rHrMin.textContent = r.hrMin ?? '—';
+  els.rDuration.textContent = r.duration;
+  els.rDistance.textContent = r.totalDistance > 0 ? (r.totalDistance/1000).toFixed(2) : '—';
+  els.rPaceAvg.textContent = fmtPace(r.paceAvgOverall);
+  els.rPaceBest.textContent = fmtPace(r.paceBest);
+  els.rAltGain.textContent = r.totalAltGain > 0 ? Math.round(r.totalAltGain) : '—';
+  els.phasesTbody.innerHTML = r.perPhase.map(p =>
+    `<tr><td>${p.name}</td><td>${fmt(p.duration)}</td><td>${p.avg ?? '—'}</td><td>${p.max ?? '—'}</td><td>${fmtPace(p.pace)}</td><td>${p.dist > 0 ? (p.dist/1000).toFixed(2) : '—'}</td></tr>`
+  ).join('');
+  els.rPeakTime.textContent = r.peakTime;
+  els.rPeakCount.textContent = r.peakCount;
+  els.report.classList.add('open');
+}
+function hideReport() { els.report.classList.remove('open'); }
+
+function buildTextReport() {
+  const r = computeReport();
+  let s = '';
+  s += `🏃 RELATÓRIO DE TREINO\n`;
+  s += `${'='.repeat(30)}\n`;
+  s += `Treino: ${r.workout}\n`;
+  s += `Início: ${r.startedAt}\n`;
+  s += `Duração: ${r.duration}\n`;
+  if (r.totalDistance > 0) s += `Distância: ${(r.totalDistance/1000).toFixed(2)} km\n`;
+  if (r.paceAvgOverall) s += `Pace médio: ${fmtPace(r.paceAvgOverall)}/km\n`;
+  if (r.totalAltGain > 0) s += `Ganho elevação (cru): ${Math.round(r.totalAltGain)}m\n`;
+  s += `\n📊 FC GERAL\n`;
+  s += `Média: ${r.hrAvg ?? '—'} bpm | Máx: ${r.hrMax ?? '—'} | Mín: ${r.hrMin ?? '—'}\n\n`;
+  s += `📈 POR FASE\n`;
+  for (const p of r.perPhase) {
+    s += `${p.name} (${fmt(p.duration)})\n`;
+    s += `  FC: avg ${p.avg ?? '—'} / max ${p.max ?? '—'} / zona ${p.zonePct ?? '—'}%\n`;
+    if (p.dist > 0) s += `  Pace: ${fmtPace(p.pace)} / Dist: ${(p.dist/1000).toFixed(2)} km\n`;
+  }
+  s += `\n⛰ PICOS na Rodagem (>165 bpm)\n`;
+  s += `Tempo: ${r.peakTime} · Picos: ${r.peakCount}\n`;
+  s += `\nAmostras: ${r.validSamples}/${r.totalSamples} válidas`;
+  return s;
+}
+
+function buildMarkdownReport() {
+  const r = computeReport();
+  const bucketSec = 10;
+  // Aggregate samples to 10s buckets
+  const buckets = new Map();
+  for (const sm of samples) {
+    const k = Math.floor(sm.t / bucketSec) * bucketSec;
+    if (!buckets.has(k)) buckets.set(k, { phase: sm.phase, bpms: [], paces: [], dist: null, alt: null });
+    const b = buckets.get(k);
+    if (sm.bpm != null) b.bpms.push(sm.bpm);
+    if (sm.pace != null && isFinite(sm.pace)) b.paces.push(sm.pace);
+    if (sm.dist != null) b.dist = sm.dist;
+    if (sm.alt != null) b.alt = sm.alt;
+  }
+  const agg = [...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(([k,b]) => ({
+    t: k, phase: b.phase,
+    bpm: b.bpms.length ? Math.round(b.bpms.reduce((x,y)=>x+y,0)/b.bpms.length) : null,
+    pace: b.paces.length ? b.paces.reduce((x,y)=>x+y,0)/b.paces.length : null,
+    dist: b.dist, alt: b.alt
+  }));
+
+  let md = '';
+  md += `# Treino: ${r.workout}\n\n`;
+  md += `**Data/Hora início:** ${r.startedAt}\n`;
+  md += `**Duração real:** ${r.duration} (planejada ${fmt(TOTAL)})\n`;
+  if (r.totalDistance > 0) md += `**Distância total:** ${(r.totalDistance/1000).toFixed(2)} km\n`;
+  if (r.paceAvgOverall) md += `**Pace médio:** ${fmtPace(r.paceAvgOverall)}/km (melhor ${fmtPace(r.paceBest)})\n`;
+  if (r.totalAltGain > 0) md += `**Ganho de elevação (GPS bruto, sem correção DEM):** ${Math.round(r.totalAltGain)}m\n`;
+  md += `**Cinta:** Coospo via BLE · **GPS:** ${gpsState}\n`;
+  md += `\n## Estrutura planejada do treino\n`;
+  for (const p of WORKOUT.phases) {
+    md += `- **${p.name}** (${fmt(p.duration)}): ${p.subtitle}. Zona alvo FC: ${p.zoneLabel}.\n`;
+  }
+  md += `\n## FC geral\n`;
+  md += `- Média: **${r.hrAvg ?? '—'} bpm** · Máxima: **${r.hrMax ?? '—'}** · Mínima: **${r.hrMin ?? '—'}**\n`;
+
+  md += `\n## Resumo por fase\n`;
+  md += `| Fase | Tempo | FC avg | FC max | % em zona | Pace avg | Distância |\n`;
+  md += `|---|---|---|---|---|---|---|\n`;
+  for (const p of r.perPhase) {
+    md += `| ${p.name} | ${fmt(p.duration)} | ${p.avg ?? '—'} | ${p.max ?? '—'} | ${p.zonePct ?? '—'}% | ${fmtPace(p.pace)} | ${p.dist > 0 ? (p.dist/1000).toFixed(2)+' km' : '—'} |\n`;
+  }
+
+  md += `\n## Picos de esforço na Rodagem (FC > 165)\n`;
+  md += `- Tempo total acima de 165: ${r.peakTime}\n`;
+  md += `- Número de picos isolados (proxy de subidas): ${r.peakCount}\n`;
+
+  md += `\n## Série temporal (agregada a cada ${bucketSec}s)\n`;
+  md += `Formato: tempo (mm:ss), fase, FC (bpm), pace (min/km), distância acumulada (km), altitude bruta (m).\n\n`;
+  md += `| t | fase | fc | pace | dist | alt |\n`;
+  md += `|---|---|---|---|---|---|\n`;
+  for (const s of agg) {
+    md += `| ${fmt(s.t)} | ${s.phase} | ${s.bpm ?? '—'} | ${fmtPace(s.pace)} | ${s.dist != null ? (s.dist/1000).toFixed(2) : '—'} | ${s.alt ?? '—'} |\n`;
+  }
+
+  md += `\n---\n`;
+  md += `*Relatório gerado pelo cronômetro autônomo do Marcos. Dados de FC vêm de cinta peitoral Coospo via Bluetooth (precisão alta). Dados de pace/distância/altitude vêm do GPS do celular (precisão típica: horizontal ±3-10m, altitude ±10-30m sem correção DEM). Treino realizado na Serra Gaúcha.*\n`;
+  return md;
+}
+function buildCSV() {
+  let csv = 't_seg,fase,bpm,dist_m,pace_seg_km,alt_m,gps_acc_m\n';
+  for (const s of samples) csv += `${s.t},${s.phase},${s.bpm ?? ''},${s.dist ?? ''},${s.pace != null ? s.pace.toFixed(1) : ''},${s.alt ?? ''},${s.acc ?? ''}\n`;
+  return csv;
+}
+function buildJSON() {
+  return JSON.stringify({
+    workout: WORKOUT, startedAt: startedAt, finishedAt: Date.now(),
+    duration_seconds: Math.round(totalElapsed),
+    samples: samples, summary: computeReport()
+  }, null, 2);
+}
+function download(filename, content, mime = 'text/plain') {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+function showToast(msg) {
+  els.toast.textContent = msg;
+  els.toast.classList.add('show');
+  setTimeout(() => els.toast.classList.remove('show'), 1800);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast('Copiado'); }
+  catch (e) { showToast('Erro ao copiar'); }
+}
+
+// =====================
+//  Events
+// =====================
+els.bleBtn.addEventListener('click', () => {
+  if (bleDevice && bleDevice.gatt.connected) disconnectBLE();
+  else connectBLE();
+});
+els.gpsBtn.addEventListener('click', () => {
+  if (gpsWatchId !== null) stopGPS();
+  else startGPS();
+});
+els.startBtn.addEventListener('click', () => {
+  initAudio();
+  if (mode === 'idle' || mode === 'finished') {
+    phaseIdx = -1; phasePos = 0; totalElapsed = 0;
+    samples = []; startedAt = Date.now();
+    // reset GPS counters (mantém a conexão se já estiver ativa)
+    totalDistance = 0; totalAltGain = 0; lastAltSmoothed = null;
+    lastValidPos = null; gpsHistory = []; currentPace = null;
+    if (gpsWatchId === null) startGPS();  // só inicia se ainda não conectado
+    enterPrep(); acquireWakeLock(); startInterval();
+  } else if (intervalId) {
+    stopInterval();
+  } else {
+    startInterval(); acquireWakeLock();
+  }
+  render();
+});
+els.resetBtn.addEventListener('click', () => {
+  if (mode !== 'idle' && !confirm('Reiniciar o treino?')) return;
+  stopInterval(); releaseWakeLock();
+  // não desconecta GPS automaticamente — usuário controla
+  mode = 'idle'; phaseIdx = -1; phasePos = 0; prepRemaining = 0;
+  totalElapsed = 0; samples = [];
+  totalDistance = 0; totalAltGain = 0; currentPace = null;
+  gpsHistory = []; lastValidPos = null; lastAltSmoothed = null;
+  render();
+});
+els.copyBtn.addEventListener('click', () => copyText(buildTextReport()));
+els.mdBtn.addEventListener('click', () => copyText(buildMarkdownReport()));
+els.csvBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`rodagem_serra_${ts}.csv`, buildCSV(), 'text/csv');
+});
+els.jsonBtn.addEventListener('click', () => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  download(`rodagem_serra_${ts}.json`, buildJSON(), 'application/json');
+});
+els.closeReportBtn.addEventListener('click', hideReport);
+
+render();
+
+</script>
+</body>
+</html>
