@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>PROVA · Serra Grande 6km v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0a;--card:#141414;--border:#2a2a2a;--text:#f0f0f0;--muted:#888;
+  --z1:#4a90d9;--z2:#34c759;--z3:#ffcc00;--z4:#ff9500;--z5:#ff3b30;
+  --cheia:#34c759;--conserv:#ff9500;
+  --safe-top:env(safe-area-inset-top,0);--safe-bot:env(safe-area-inset-bottom,0);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:600;height:100vh;overflow:hidden;user-select:none;-webkit-user-select:none}
+.mono{font-family:'JetBrains Mono',monospace;font-weight:700}
+.screen{position:fixed;inset:0;padding:calc(var(--safe-top)+12px) 12px calc(var(--safe-bot)+12px);display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.screen[hidden]{display:none}
+@media screen and (orientation:landscape) and (max-height:500px){
+  #setup,#prelarg,#race,#report{display:none!important}
+  #landscape-warn{display:flex!important}
+}
+#landscape-warn{display:none;position:fixed;inset:0;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:24px;text-align:center;z-index:9999}
+#landscape-warn .icon{font-size:80px}
+#landscape-warn h1{font-size:24px;font-weight:900}
+#landscape-warn p{font-size:16px;color:var(--muted);max-width:300px}
+h1.title{font-size:26px;font-weight:900;line-height:1;letter-spacing:-1px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+.card h2{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin:0 0 8px}
+.btn{background:var(--card);border:1px solid var(--border);color:var(--text);font-family:inherit;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:1.5px;padding:13px 16px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;width:100%}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn.connected{border-color:var(--z2);color:var(--z2)}
+.btn.error{border-color:var(--z5);color:var(--z5)}
+.btn.warn-test{border-color:var(--z3);color:var(--z3)}
+.btn.recover{border-color:var(--z4);color:var(--z4);background:rgba(255,149,0,0.1)}
+.btn.go{background:var(--z5);color:#fff;border-color:var(--z5);font-size:20px;padding:20px;letter-spacing:3px}
+.sim-badge{display:inline-block;background:var(--z4);color:var(--bg);padding:4px 10px;border-radius:4px;font-size:11px;font-weight:900;letter-spacing:2px;margin-left:8px;vertical-align:middle}
+.tip-box{background:#0e1a14;border:1px solid #1a3a2a;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:8px}
+.tip-box strong{color:var(--z3)}
+.strat-table{width:100%;border-collapse:collapse;font-size:13px}
+.strat-table td{padding:6px 4px;border-bottom:1px solid var(--border)}
+.strat-table tr:last-child td{border-bottom:none}
+.strat-table .km{font-weight:900;font-family:'JetBrains Mono',monospace}
+.strat-table .fc{font-family:'JetBrains Mono',monospace;color:var(--z3);text-align:right}
+.strat-table .desc{color:var(--muted);font-size:12px}
+.phase-list{list-style:none;font-size:13px}
+.phase-list li{padding:7px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.phase-list li:last-child{border-bottom:none}
+.phase-list .meta{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px}
+
+/* PRE-LARGADA */
+#prelarg{gap:8px;justify-content:space-between}
+.prelarg-phase{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+.prelarg-phase .pname{font-size:20px;font-weight:900;text-transform:uppercase;line-height:1}
+.prelarg-phase .pnote{font-size:13px;color:var(--muted);font-style:italic;margin-top:4px}
+.cd-big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20vw;line-height:0.85;text-align:center;letter-spacing:-4px}
+.cd-big.warn{color:var(--z4)}
+.cd-big.critical{color:var(--z5);animation:pulse 0.5s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:0.4}}
+.stride-badge{text-align:center;font-size:16px;font-weight:900;color:var(--z4);text-transform:uppercase;letter-spacing:2px;min-height:22px}
+
+/* RACE SCREEN */
+#race{gap:8px;justify-content:space-between;padding-top:calc(var(--safe-top)+8px)}
+.race-top{display:flex;gap:8px;align-items:stretch}
+.mode-toggle{flex:1;border-radius:10px;border:2px solid var(--cheia);background:rgba(52,199,89,0.1);color:var(--cheia);font-weight:900;font-size:14px;text-transform:uppercase;letter-spacing:1px;padding:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:center}
+.mode-toggle.conserv{border-color:var(--conserv);background:rgba(255,149,0,0.12);color:var(--conserv)}
+.mode-toggle .mt-sub{font-size:10px;font-weight:700;letter-spacing:0.5px;opacity:0.8}
+.km-counter{flex:0 0 auto;min-width:108px;border-radius:10px;border:2px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 14px}
+.km-counter .kc-num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:30px;line-height:1}
+.km-counter .kc-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.timer-row{text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:38px;letter-spacing:1px}
+.timer-row .tlabel{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600}
+.seg-name{text-align:center;font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:-0.5px;line-height:1}
+.seg-cue{text-align:center;font-size:14px;color:var(--muted);font-style:italic;min-height:20px;padding:0 12px}
+.hr-display{background:var(--card);border:3px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:2px;transition:border-color 0.3s,background 0.3s}
+.hr-display.z1{border-color:var(--z1)}.hr-display.z2{border-color:var(--z2)}.hr-display.z3{border-color:var(--z3)}.hr-display.z4{border-color:var(--z4)}.hr-display.z5{border-color:var(--z5)}
+.hr-display.alert{background:rgba(255,59,48,0.15);animation:pulse-bg 1s infinite alternate}
+@keyframes pulse-bg{from{background:rgba(255,59,48,0.2)}to{background:rgba(255,59,48,0.05)}}
+.hr-row{display:flex;align-items:baseline;gap:14px}
+.hr-value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:64px;line-height:1}
+.hr-arrow{font-size:40px;font-weight:900}
+.hr-zone-label{font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.hr-target{font-size:13px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:1px}
+.terrain-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.t-btn{background:var(--card);border:2px solid var(--border);color:var(--muted);font-family:inherit;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:1px;padding:10px 4px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.t-btn .t-icon{font-size:18px;line-height:1}
+.t-btn .t-target{font-size:9px;font-family:'JetBrains Mono',monospace}
+.t-btn[data-mode="plano"].active{border-color:var(--z2);color:var(--z2);background:rgba(52,199,89,0.1)}
+.t-btn[data-mode="subida"].active{border-color:var(--z3);color:var(--z3);background:rgba(255,204,0,0.1)}
+.km-btn{background:var(--text);color:var(--bg);border:none;border-radius:14px;padding:22px;font-family:inherit;font-weight:900;font-size:24px;text-transform:uppercase;letter-spacing:2px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:12px}
+.km-btn.final{background:var(--z5);color:#fff;animation:finalpulse 0.8s infinite alternate}
+@keyframes finalpulse{from{transform:scale(1)}to{transform:scale(1.02)}}
+.race-controls{display:flex;gap:6px}
+.race-controls .btn{font-size:12px;padding:11px 4px;flex:1}
+.undo-btn{flex:0 0 auto;min-width:64px}
+
+/* REPORT */
+#report h1{font-size:24px;font-weight:900}
+.auto-dl-note{font-size:12px;color:var(--z2);text-align:center;padding:4px 0}
+.report-summary{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.report-summary .item .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.report-summary .item .value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px}
+.report-phases{list-style:none;font-size:13px}
+.report-phases li{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px}
+.report-phases .phase-line{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.report-phases .stats{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+.report-phases .zones-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:6px;background:#222}
+.zone-seg.z1{background:var(--z1)}.zone-seg.z2{background:var(--z2)}.zone-seg.z3{background:var(--z3)}.zone-seg.z4{background:var(--z4)}.zone-seg.z5{background:var(--z5)}
+.export-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+#saveIndicator{position:fixed;top:calc(var(--safe-top)+4px);right:10px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#444;pointer-events:none;z-index:50}
+#saveIndicator.saved{color:var(--z2)}
+#diag{position:fixed;bottom:calc(var(--safe-bot)+2px);left:8px;font-size:9px;color:#444;font-family:'JetBrains Mono',monospace;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="landscape-warn">
+  <div class="icon">📱</div>
+  <h1>GIRA O CELULAR</h1>
+  <p>Trava a rotação em retrato antes da largada.</p>
+</div>
+
+<div id="saveIndicator">●</div>
+
+<!-- RECOVER MODAL -->
+<div id="recoverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:24px">
+  <div class="card" style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:20px;font-weight:900">⚠ PROVA INTERROMPIDA</div>
+    <div style="font-size:14px;color:var(--muted);line-height:1.5" id="recoverInfo"></div>
+    <button class="btn recover" id="recoverBtn">↩ RECUPERAR E EXPORTAR</button>
+    <button class="btn error" id="discardBtn">✕ DESCARTAR</button>
+  </div>
+</div>
+
+<!-- ============ SETUP ============ -->
+<div id="setup" class="screen">
+  <div>
+    <h1 class="title">PROVA · SERRA GRANDE<br>6 KM<span class="sim-badge" id="simBadge" hidden>SIM</span></h1>
+    <div style="color:var(--muted);font-size:14px;margin-top:6px">v1 · Negative split · Finalização forte</div>
+  </div>
+
+  <div class="card">
+    <h2>Sensores</h2>
+    <button class="btn" id="bleBtn">📡 Conectar cinta (BLE)</button>
+    <div class="tip-box"><strong>⚠ Ordem:</strong> conecta a cinta AQUI primeiro, depois abre o Strava.</div>
+    <div style="height:8px"></div>
+    <button class="btn warn-test" id="vibeTestBtn">📳 Testar vibração</button>
+  </div>
+
+  <div class="card">
+    <h2>Estratégia por km · modo Cheia</h2>
+    <table class="strat-table">
+      <tr><td class="km">KM 1</td><td class="desc">Segura. Eles voltam</td><td class="fc">150-156</td></tr>
+      <tr><td class="km">KM 2</td><td class="desc">Estabiliza</td><td class="fc">155-162</td></tr>
+      <tr><td class="km">KM 3</td><td class="desc">Trabalha</td><td class="fc">155-162</td></tr>
+      <tr><td class="km">KM 4</td><td class="desc">Começa o jogo</td><td class="fc">160-168</td></tr>
+      <tr><td class="km">KM 5</td><td class="desc">Pega um por um</td><td class="fc">162-170</td></tr>
+      <tr><td class="km">KM 6</td><td class="desc">Esvazia o tanque</td><td class="fc" style="color:var(--z5)">SEM TETO</td></tr>
+    </table>
+    <div class="tip-box"><strong>Conservadora:</strong> toque o seletor durante a prova para baixar todos os tetos em 9 bpm. Reversível a qualquer momento.</div>
+  </div>
+
+  <div class="card">
+    <h2>Aquecimento (antes da largada)</h2>
+    <ul class="phase-list" id="warmList"></ul>
+  </div>
+
+  <div class="card" style="background:#1a1a0e;border-color:#3a3a1a">
+    <h2 style="color:var(--z3)">Antes de iniciar</h2>
+    <div style="font-size:13px;line-height:1.7">
+      <strong style="color:var(--z3)">1.</strong> Trava rotação em retrato<br>
+      <strong style="color:var(--z3)">2.</strong> Modo avião OU não perturbe (sem notificações)<br>
+      <strong style="color:var(--z3)">3.</strong> Cinta no HTML, depois Strava<br>
+      <strong style="color:var(--z3)">4.</strong> Não sai do Chrome durante a prova<br>
+      <strong style="color:var(--z3)">5.</strong> A cada km que o Strava cantar, toca o botão grande
+    </div>
+  </div>
+
+  <button class="btn primary" id="toPrelargBtn">▶ IR PARA AQUECIMENTO</button>
+  <div style="height:8px"></div>
+</div>
+
+<!-- ============ PRE-LARGADA ============ -->
+<div id="prelarg" class="screen" hidden>
+  <div class="prelarg-phase">
+    <div class="pname" id="plName">—</div>
+    <div class="pnote" id="plNote"></div>
+  </div>
+  <div class="cd-big" id="plCd">00:00</div>
+  <div class="stride-badge" id="strideBadge"></div>
+  <div class="hr-display" id="plHr">
+    <div class="hr-zone-label" id="plHrZone">—</div>
+    <div class="hr-row"><div class="hr-value" id="plHrValue">--</div></div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button class="btn" id="plSkipBtn">⏭ PULAR FASE</button>
+  </div>
+  <button class="btn go" id="largadaBtn">🏁 LARGADA</button>
+  <div style="font-size:12px;color:var(--muted);text-align:center">Toca LARGADA quando cruzar o tapete de partida</div>
+  <div style="height:4px"></div>
+</div>
+
+<!-- ============ RACE ============ -->
+<div id="race" class="screen" hidden>
+  <div class="race-top">
+    <button class="mode-toggle" id="modeToggle">
+      <span id="modeLabel">CHEIA</span>
+      <span class="mt-sub" id="modeSub">tetos normais</span>
+    </button>
+    <div class="km-counter">
+      <div class="kc-num"><span id="kmNum">1</span><span style="font-size:18px;color:var(--muted)">/6</span></div>
+      <div class="kc-lbl">KM atual</div>
+    </div>
+  </div>
+
+  <div class="timer-row"><span class="tlabel">Tempo de prova</span><span id="raceTimer">00:00</span></div>
+
+  <div class="seg-name" id="segName">KM 1</div>
+  <div class="seg-cue" id="segCue">Segura. Eles voltam pra ti.</div>
+
+  <div class="hr-display" id="hrDisp">
+    <div class="hr-zone-label" id="hrZone">—</div>
+    <div class="hr-row">
+      <div class="hr-value" id="hrValue">--</div>
+      <div class="hr-arrow" id="hrArrow"></div>
+    </div>
+    <div class="hr-target" id="hrTarget">alvo: —</div>
+  </div>
+
+  <div class="terrain-row">
+    <button class="t-btn active" data-mode="plano"><span class="t-icon">━</span><span style="font-size:11px">Plano</span><span class="t-target" id="tPlano">—</span></button>
+    <button class="t-btn" data-mode="subida"><span class="t-icon">↗</span><span style="font-size:11px">Subida</span><span class="t-target" id="tSubida">—</span></button>
+  </div>
+
+  <button class="km-btn" id="kmBtn">✓ MARCAR KM 1 →</button>
+
+  <div class="race-controls">
+    <button class="btn undo-btn" id="undoKmBtn">↩ KM</button>
+    <button class="btn error" id="finishBtn">🏁 CHEGUEI</button>
+  </div>
+  <div style="height:2px"></div>
+</div>
+
+<!-- ============ REPORT ============ -->
+<div id="report" class="screen" hidden>
+  <h1>RELATÓRIO DA PROVA</h1>
+  <div class="auto-dl-note" id="autoDlNote">⬇ Download automático iniciado...</div>
+  <div class="report-summary" id="reportSummary"></div>
+  <div>
+    <h2 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Por km</h2>
+    <ul class="report-phases" id="reportPhases"></ul>
+  </div>
+  <div class="export-row">
+    <button class="btn" id="expTxt">TXT</button>
+    <button class="btn" id="expCsv">CSV</button>
+    <button class="btn" id="expJson">JSON</button>
+  </div>
+  <button class="btn" onclick="location.reload()">↻ FECHAR</button>
+  <div style="height:12px"></div>
+</div>
+
+<div id="diag"></div>
+
+<script>
+'use strict';
+
+const SIM = new URLSearchParams(location.search).get('sim') === '1';
+const STORAGE_KEY = 'prova_serra_grande_v1';
+const AUTOSAVE_INTERVAL = 10000;
+const GRACE_SEC = 12;
+const HR_ALERT_INTERVAL = 5000;
+const CONSERV_DELTA = 9; // -9 bpm na versão conservadora
+
+const ZONES = [
+  {key:'z1',label:'Z1',min:125,max:136},
+  {key:'z2',label:'Z2',min:136,max:147},
+  {key:'z3',label:'Z3',min:147,max:158},
+  {key:'z4',label:'Z4',min:158,max:170},
+  {key:'z5',label:'Z5',min:170,max:181},
+];
+function zoneOf(hr){
+  if(!hr||hr<1)return null;
+  if(hr<125)return{key:'sub',label:'<Z1'};
+  for(const z of ZONES)if(hr>=z.min&&hr<z.max)return z;
+  return ZONES[ZONES.length-1];
+}
+
+// ===== ESTRATÉGIA POR KM (modo Cheia) =====
+// hrMin/hrMax base = plano. Subida soma deltaSub ao teto e piso.
+const KM_PLAN = [
+  {km:1, name:'KM 1', planMin:150, planMax:156, subMin:156, subMax:165, cue:'Segura. Eles voltam pra ti.', noCeil:false},
+  {km:2, name:'KM 2', planMin:155, planMax:162, subMin:160, subMax:168, cue:'Estabiliza. Respiração rítmica.', noCeil:false},
+  {km:3, name:'KM 3', planMin:155, planMax:162, subMin:160, subMax:168, cue:'Agora trabalha. Ritmo firme.', noCeil:false},
+  {km:4, name:'KM 4', planMin:160, planMax:168, subMin:164, subMax:170, cue:'Começa o jogo. Pega um por vez.', noCeil:false},
+  {km:5, name:'KM 5', planMin:162, planMax:170, subMin:166, subMax:172, cue:'Acelera progressivo. Passa quem saiu forte.', noCeil:false},
+  {km:6, name:'KM 6 · FINAL', planMin:168, planMax:300, subMin:168, subMax:300, cue:'TUDO. Sem teto. Esvazia o tanque. Sprint nos últimos 200m.', noCeil:true},
+];
+
+// Aquecimento (pré-largada) — strides estruturados
+function buildWarmup(){
+  const ph=[];
+  ph.push({name:'Aquecimento', dur:480, hrMin:125, hrMax:147, kind:'warm',
+    note:'Trote leve crescente. Solta o corpo. Z1 → Z2.'});
+  // 3 strides estruturados: 15s forte + 45s recuperação
+  for(let i=1;i<=3;i++){
+    ph.push({name:`Stride ${i}/3 · FORTE`, dur:15, hrMin:0, hrMax:300, kind:'stride_on',
+      note:'Acelera progressivo, passada solta. Sem sprint total.'});
+    ph.push({name:`Recup ${i}/3`, dur:45, hrMin:0, hrMax:140, kind:'stride_off',
+      note:'Trote leve / caminhada. Recupera.'});
+  }
+  ph.push({name:'Pronto', dur:120, hrMin:0, hrMax:145, kind:'ready',
+    note:'Mantém o corpo quente. Aguarda a largada. Toca LARGADA ao cruzar o tapete.'});
+  return ph;
+}
+function simWarm(ph){ return ph.map(p=>({...p, dur:p.kind==='warm'?8:p.kind==='ready'?6:p.dur})); }
+
+let WARMUP = buildWarmup();
+if(SIM) WARMUP = simWarm(WARMUP);
+
+let state = {
+  phase:'setup', // setup | prelarg | race | report
+  // pré-largada
+  wIdx:0, wStartTs:0, wRunning:false, wPausedTotal:0,
+  // prova
+  raceStartTs:0, raceRunning:false,
+  kmIdx:0, // 0 = km 1
+  mode:'cheia', terrain:'plano',
+  hr:null, hrLastTs:0, hrAlertTs:0, hrInZone:null,
+  log:[], kmMarks:[],
+};
+
+// ===== AUTO-SAVE =====
+function saveSession(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ts:Date.now(), phase:state.phase, log:state.log, kmMarks:state.kmMarks,
+      kmIdx:state.kmIdx, mode:state.mode,
+      raceElapsed: state.raceRunning?Math.round(raceElapsedSec()):0,
+    }));
+    const el=document.getElementById('saveIndicator'); if(el){el.className='saved';el.textContent='● salvo';}
+  }catch(e){}
+}
+function clearSession(){ try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} }
+function checkRecover(){
+  let saved; try{ saved=JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch(e){ return; }
+  if(!saved||!saved.log||saved.log.length<5) return;
+  const ageMin=(Date.now()-saved.ts)/60000;
+  if(ageMin>180){ clearSession(); return; }
+  const m=document.getElementById('recoverModal');
+  document.getElementById('recoverInfo').textContent=`Prova de ${new Date(saved.ts).toLocaleTimeString('pt-BR')} · ${saved.log.length} amostras · ${saved.kmMarks?saved.kmMarks.length:0} km marcados.`;
+  m.style.display='flex';
+  document.getElementById('recoverBtn').onclick=()=>{
+    m.style.display='none';
+    state.log=saved.log; state.kmMarks=saved.kmMarks||[];
+    showReport(true); setTimeout(()=>autoDownload(),800); clearSession();
+  };
+  document.getElementById('discardBtn').onclick=()=>{ clearSession(); m.style.display='none'; };
+}
+
+// ===== AUDIO =====
+let audioCtx=null;
+function initAudio(){ if(audioCtx)return; try{ audioCtx=new(window.AudioContext||window.webkitAudioContext)() }catch(e){} }
+function beep(freq,dur=0.15,vol=0.3,type='sine'){
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(0,audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(vol,audioCtx.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start();o.stop(audioCtx.currentTime+dur);
+}
+function chord(fs,dur=0.4,vol=0.2){ fs.forEach(f=>beep(f,dur,vol)); }
+const SOUND={
+  countdown:()=>beep(880,0.1,0.3),
+  go:()=>beep(1200,0.25,0.35),
+  phaseChange:()=>{ beep(660,0.15); setTimeout(()=>beep(990,0.2),120); },
+  strideOn:()=>{ beep(1000,0.12,0.32); setTimeout(()=>beep(1400,0.15,0.32),90); },
+  strideOff:()=>beep(500,0.18,0.28),
+  inZone:()=>chord([784,1175],0.35,0.18),
+  hrHigh1:()=>beep(330,0.12,0.25,'square'),
+  hrHigh2:()=>{ beep(300,0.12,0.28,'square'); setTimeout(()=>beep(300,0.12,0.28,'square'),160); },
+  hrLow:()=>beep(220,0.16,0.22,'square'),
+  km:()=>{ beep(880,0.1,0.3); setTimeout(()=>beep(1320,0.18,0.32),90); },
+  largada:()=>{ beep(700,0.15,0.35); setTimeout(()=>beep(1050,0.15,0.35),150); setTimeout(()=>beep(1400,0.3,0.4),300); },
+  final:()=>chord([1047,1568],0.5,0.25),
+  modeSwitch:()=>{ beep(600,0.1,0.25); setTimeout(()=>beep(450,0.12,0.25),90); },
+};
+let vibeSupported='vibrate'in navigator;
+function vibe(p){ if(!vibeSupported)return false; try{ return navigator.vibrate(p) }catch(e){ return false } }
+function testVibe(){
+  const btn=document.getElementById('vibeTestBtn'); initAudio();
+  const ok=vibe([300,150,300,150,500]); SOUND.countdown();
+  if(ok===false){ btn.classList.add('error');btn.classList.remove('warn-test');btn.textContent='⚠ Vibração bloqueada';
+    setTimeout(()=>alert('Vibração bloqueada.\n\n1. Não perturbe DESLIGADO\n2. Economia de bateria DESLIGADA\n3. Som ATIVO\n4. Chrome'),300);
+  }else{ btn.classList.add('connected');btn.classList.remove('warn-test','error');btn.textContent='✓ Vibração OK'; }
+}
+
+// ===== BLE =====
+let bleDevice=null,bleChar=null;
+async function connectBLE(){
+  const btn=document.getElementById('bleBtn');
+  try{
+    if(!navigator.bluetooth)throw new Error('Bluetooth indisponível');
+    btn.textContent='⏳ Procurando...';
+    bleDevice=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}],optionalServices:['battery_service']});
+    bleDevice.addEventListener('gattserverdisconnected',()=>{ btn.classList.remove('connected');btn.classList.add('error');btn.textContent='⚠ Desconectado · tocar'; });
+    const srv=await bleDevice.gatt.connect();
+    const svc=await srv.getPrimaryService('heart_rate');
+    bleChar=await svc.getCharacteristic('heart_rate_measurement');
+    await bleChar.startNotifications();
+    bleChar.addEventListener('characteristicvaluechanged',e=>{
+      const v=e.target.value,flags=v.getUint8(0);
+      state.hr=(flags&0x01)?v.getUint16(1,true):v.getUint8(1); state.hrLastTs=Date.now();
+    });
+    btn.classList.add('connected');btn.classList.remove('error');btn.textContent='✓ '+(bleDevice.name||'Cinta')+' conectada';
+  }catch(e){
+    btn.classList.add('error');
+    const msg=e.message||'Erro';
+    btn.textContent=(msg.includes('GATT')||msg.includes('NotFound'))?'⚠ Cinta ocupada — feche o Strava':'⚠ '+msg.slice(0,38);
+  }
+}
+
+function fmtTime(s){ s=Math.max(0,Math.floor(s)); const m=Math.floor(s/60),x=s%60; return String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+
+// ===== WAKE LOCK =====
+let wakeLock=null;
+async function requestWakeLock(){ try{ if('wakeLock'in navigator){ wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){} }
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible'&&(state.wRunning||state.raceRunning)){ await requestWakeLock(); }
+});
+
+// ===== SETUP RENDER =====
+function renderSetup(){
+  if(SIM)document.getElementById('simBadge').hidden=false;
+  const ul=document.getElementById('warmList'); ul.innerHTML='';
+  WARMUP.forEach(p=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<span>${p.name}</span><span class="meta">${p.dur}s</span>`;
+    ul.appendChild(li);
+  });
+}
+
+// ===== PRE-LARGADA =====
+let plTick=null;
+function goPrelarg(){
+  state.phase='prelarg'; initAudio(); requestWakeLock();
+  document.getElementById('setup').hidden=true;
+  document.getElementById('prelarg').hidden=false;
+  enterWarm(0);
+  state.wRunning=true;
+  plTick=setInterval(tickPrelarg,200);
+}
+function enterWarm(idx){
+  state.wIdx=idx; state.wStartTs=Date.now();
+  const p=WARMUP[idx];
+  SOUND.phaseChange();
+  if(p.kind==='stride_on'){ SOUND.strideOn(); vibe([200,80,200]); }
+  else if(p.kind==='stride_off'){ SOUND.strideOff(); vibe(120); }
+  else vibe([300,100,300]);
+  document.getElementById('plName').textContent=p.name;
+  document.getElementById('plNote').textContent=p.note||'';
+  const sb=document.getElementById('strideBadge');
+  if(p.kind==='stride_on') sb.textContent='⚡ FORTE';
+  else if(p.kind==='stride_off') sb.textContent='· recupera ·';
+  else sb.textContent='';
+}
+function wElapsed(){ return (Date.now()-state.wStartTs)/1000; }
+function tickPrelarg(){
+  const p=WARMUP[state.wIdx];
+  const remain=p.dur-wElapsed();
+  const cd=document.getElementById('plCd');
+  cd.textContent=fmtTime(Math.max(0,remain));
+  cd.classList.toggle('warn',remain<=5&&remain>2);
+  cd.classList.toggle('critical',remain<=2&&remain>0);
+  if(remain<=3.4&&remain>0.4){ const sec=Math.ceil(remain); if(sec!==tickPrelarg._last&&sec>=1&&sec<=3){ tickPrelarg._last=sec; SOUND.countdown(); vibe([100,50,100]); } }
+  renderPlHr();
+  if(wElapsed()>=p.dur){
+    if(state.wIdx+1>=WARMUP.length){ /* fica no ready até largar */ enterWarm(WARMUP.length-1); }
+    else enterWarm(state.wIdx+1);
+  }
+}
+function renderPlHr(){
+  const fresh=state.hr&&(Date.now()-state.hrLastTs<8000);
+  document.getElementById('plHrValue').textContent=fresh?state.hr:'--';
+  const z=fresh?zoneOf(state.hr):null;
+  document.getElementById('plHrZone').textContent=fresh?(z?z.label:'—'):(state.hr?'SINAL FRACO':'SEM CINTA');
+  const d=document.getElementById('plHr'); d.className='hr-display'; if(z&&['z1','z2','z3','z4','z5'].includes(z.key))d.classList.add(z.key);
+}
+function skipWarmPhase(){ if(state.wIdx+1>=WARMUP.length)enterWarm(WARMUP.length-1); else enterWarm(state.wIdx+1); }
+
+// ===== LARGADA → RACE =====
+let raceTick=null, logIv=null, saveIv=null;
+function startRace(){
+  state.phase='race'; state.wRunning=false; clearInterval(plTick);
+  state.raceStartTs=Date.now(); state.raceRunning=true; state.kmIdx=0;
+  document.getElementById('prelarg').hidden=true;
+  document.getElementById('race').hidden=false;
+  SOUND.largada(); vibe([300,100,300,100,500]);
+  enterKm(0);
+  raceTick=setInterval(tickRace,200);
+  logIv=setInterval(logSecond,1000);
+  saveIv=setInterval(()=>{ if(state.raceRunning)saveSession(); },AUTOSAVE_INTERVAL);
+}
+function raceElapsedSec(){ return state.raceRunning?(Date.now()-state.raceStartTs)/1000:0; }
+
+function currentTarget(){
+  const k=KM_PLAN[state.kmIdx];
+  let min,max;
+  if(state.terrain==='subida'){ min=k.subMin; max=k.subMax; }
+  else { min=k.planMin; max=k.planMax; }
+  if(state.mode==='conserv' && !k.noCeil){ min=Math.max(120,min-CONSERV_DELTA); max=max-CONSERV_DELTA; }
+  return {min,max,noCeil:k.noCeil};
+}
+function enterKm(idx){
+  state.kmIdx=idx; state.hrAlertTs=0; state.hrInZone=null;
+  const k=KM_PLAN[idx];
+  document.getElementById('kmNum').textContent=k.km;
+  document.getElementById('segName').textContent=k.name;
+  document.getElementById('segCue').textContent=k.cue;
+  // botão
+  const btn=document.getElementById('kmBtn');
+  if(idx>=KM_PLAN.length-1){ btn.textContent='🏁 ÚLTIMO KM — CHEGA NO FIM'; btn.classList.add('final'); }
+  else{ btn.textContent=`✓ MARCAR KM ${k.km} →`; btn.classList.remove('final'); }
+  updateTargetUI();
+  SOUND.phaseChange();
+}
+function markKm(){
+  // registra a marca no km atual e avança
+  state.kmMarks.push({km:KM_PLAN[state.kmIdx].km, t:Math.round(raceElapsedSec())});
+  SOUND.km(); vibe([250,80,250]);
+  if(state.kmIdx+1>=KM_PLAN.length){ /* já no último, marcar = chegou */ finishRace(); return; }
+  enterKm(state.kmIdx+1);
+  saveSession();
+}
+function undoKm(){
+  if(state.kmIdx===0)return;
+  if(state.kmMarks.length)state.kmMarks.pop();
+  enterKm(state.kmIdx-1); vibe([120,60,120]); beep(400,0.15,0.25);
+}
+function setTerrain(mode){
+  state.terrain=mode;
+  document.querySelectorAll('.t-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  state.hrAlertTs=Date.now(); state.hrInZone=null;
+  updateTargetUI();
+  beep(550,0.08,0.2); setTimeout(()=>beep(770,0.1,0.2),60); vibe([60,40,60]);
+}
+function toggleMode(){
+  state.mode = state.mode==='cheia'?'conserv':'cheia';
+  const tg=document.getElementById('modeToggle'), lbl=document.getElementById('modeLabel'), sub=document.getElementById('modeSub');
+  if(state.mode==='conserv'){ tg.classList.add('conserv'); lbl.textContent='CONSERVADORA'; sub.textContent='tetos -9 bpm'; }
+  else{ tg.classList.remove('conserv'); lbl.textContent='CHEIA'; sub.textContent='tetos normais'; }
+  state.hrAlertTs=Date.now(); state.hrInZone=null;
+  updateTargetUI();
+  SOUND.modeSwitch(); vibe([150,80,150,80,150]);
+}
+function updateTargetUI(){
+  const t=currentTarget();
+  document.getElementById('hrTarget').textContent = t.noCeil?`alvo: ${t.min}+ · SEM TETO`:`alvo: ${t.min}-${t.max} bpm`;
+  // atualiza mini-labels dos botões terreno
+  const k=KM_PLAN[state.kmIdx];
+  const cd=state.mode==='conserv'&&!k.noCeil?CONSERV_DELTA:0;
+  document.getElementById('tPlano').textContent = k.noCeil?`${k.planMin}+`:`${k.planMin-cd}-${k.planMax-cd}`;
+  document.getElementById('tSubida').textContent = k.noCeil?`${k.subMin}+`:`${k.subMin-cd}-${k.subMax-cd}`;
+}
+
+function tickRace(){
+  document.getElementById('raceTimer').textContent=fmtTime(raceElapsedSec());
+  renderHR();
+  const t=currentTarget();
+  if(raceElapsedSec()>GRACE_SEC && state.hr && !t.noCeil) checkHRAlert();
+}
+function renderHR(){
+  const disp=document.getElementById('hrDisp'),v=document.getElementById('hrValue'),a=document.getElementById('hrArrow'),zl=document.getElementById('hrZone');
+  const fresh=state.hr&&(Date.now()-state.hrLastTs<8000);
+  if(!fresh){ v.textContent='--';a.textContent='';zl.textContent=state.hr?'SINAL FRACO':'SEM CINTA';disp.className='hr-display';return; }
+  v.textContent=state.hr;
+  const z=zoneOf(state.hr); zl.textContent=z?z.label:'—';
+  disp.className='hr-display'; if(z&&['z1','z2','z3','z4','z5'].includes(z.key))disp.classList.add(z.key);
+  const t=currentTarget();
+  if(t.noCeil){ a.textContent='🔥';a.style.color='var(--z5)'; }
+  else if(state.hr<t.min){ a.textContent='↗';a.style.color='var(--z4)'; }
+  else if(state.hr>t.max){ a.textContent='↘';a.style.color='var(--z5)'; }
+  else{ a.textContent='✓';a.style.color='var(--z2)'; }
+  disp.classList.toggle('alert', !t.noCeil && state.hr>t.max+8);
+}
+function checkHRAlert(){
+  const hr=state.hr, t=currentTarget();
+  const tooLow=hr<t.min, tooHigh=hr>t.max;
+  const out=tooLow||tooHigh, now=Date.now();
+  if(!out&&state.hrInZone===false){ SOUND.inZone(); vibe([80,40,80]); }
+  if(state.hrInZone===null||state.hrInZone!==!out)state.hrInZone=!out;
+  if(out&&now-state.hrAlertTs>=HR_ALERT_INTERVAL){
+    state.hrAlertTs=now;
+    if(tooHigh){
+      // NOVO PADRÃO: 1 vibração = levemente acima (até +8). 2 vibrações = excede tolerância (>+8).
+      if(hr>t.max+8){ SOUND.hrHigh2(); vibe([200,120,200]); }   // 2 pulsos
+      else { SOUND.hrHigh1(); vibe(180); }                       // 1 pulso
+    } else if(tooLow){ SOUND.hrLow(); vibe([90,200,90]); }       // padrão distinto p/ baixo (não confunde)
+  }
+}
+
+function logSecond(){
+  state.log.push({ t:Math.round(raceElapsedSec()), km:KM_PLAN[state.kmIdx].km, mode:state.mode, terrain:state.terrain, hr:state.hr });
+}
+
+function finishRace(){
+  state.raceRunning=false;
+  clearInterval(raceTick);clearInterval(logIv);clearInterval(saveIv);
+  if(wakeLock)try{wakeLock.release()}catch(e){}
+  SOUND.final(); setTimeout(()=>SOUND.go(),300);
+  vibe([400,150,400,150,800]);
+  clearSession();
+  showReport(false);
+  setTimeout(()=>autoDownload(),800);
+}
+
+function showReport(isRecovered){
+  state.phase='report';
+  document.getElementById('race').hidden=true;
+  document.getElementById('prelarg').hidden=true;
+  document.getElementById('setup').hidden=true;
+  document.getElementById('report').hidden=false;
+  const total=state.log.length?state.log[state.log.length-1].t:0;
+  const allHR=state.log.map(l=>l.hr).filter(h=>h&&h>30);
+  const avg=allHR.length?Math.round(allHR.reduce((a,b)=>a+b,0)/allHR.length):0;
+  const max=allHR.length?Math.max(...allHR):0;
+  const min=allHR.length?Math.min(...allHR):0;
+  if(isRecovered)document.getElementById('autoDlNote').textContent='♻ Prova recuperada. Download iniciado...';
+  document.getElementById('reportSummary').innerHTML=`
+    <div class="item"><div class="label">Tempo total</div><div class="value">${fmtTime(total)}</div></div>
+    <div class="item"><div class="label">KM marcados</div><div class="value">${state.kmMarks.length}</div></div>
+    <div class="item"><div class="label">FC média</div><div class="value">${avg||'--'}</div></div>
+    <div class="item"><div class="label">FC máx</div><div class="value">${max||'--'}</div></div>
+  `;
+  // splits por km
+  const ul=document.getElementById('reportPhases'); ul.innerHTML='';
+  let prevT=0;
+  state.kmMarks.forEach((mk,i)=>{
+    const split=mk.t-prevT; prevT=mk.t;
+    const hrs=state.log.filter(l=>l.km===mk.km).map(l=>l.hr).filter(h=>h&&h>30);
+    const a=hrs.length?Math.round(hrs.reduce((x,y)=>x+y,0)/hrs.length):0;
+    const m=hrs.length?Math.max(...hrs):0;
+    const zc={z1:0,z2:0,z3:0,z4:0,z5:0}; hrs.forEach(h=>{const z=zoneOf(h);if(z&&zc[z.key]!==undefined)zc[z.key]++;});
+    const tz=hrs.length||1;
+    const segs=['z1','z2','z3','z4','z5'].map(k=>zc[k]?`<div class="zone-seg ${k}" style="width:${zc[k]/tz*100}%"></div>`:'').join('');
+    const li=document.createElement('li');
+    li.innerHTML=`<div class="phase-line"><strong>KM ${mk.km}</strong><span class="stats">${fmtTime(split)} · FC ${a||'--'}/${m||'--'}</span></div><div class="zones-bar">${segs}</div>`;
+    ul.appendChild(li);
+  });
+  // último trecho (km final, sem marca de fim explícita além do CHEGUEI)
+  if(state.kmMarks.length){
+    const lastT=state.kmMarks[state.kmMarks.length-1].t;
+    const finalSplit=total-lastT;
+    if(finalSplit>3){
+      const li=document.createElement('li');
+      li.innerHTML=`<div class="phase-line"><strong>FINAL</strong><span class="stats">${fmtTime(finalSplit)}</span></div>`;
+      ul.appendChild(li);
+    }
+  }
+}
+
+// ===== EXPORTS =====
+function dateStamp(){ const d=new Date(); return d.toISOString().slice(0,16).replace(/[-:T]/g,''); }
+function download(content,filename,type){ const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},100); }
+function autoDownload(){
+  const note=document.getElementById('autoDlNote');
+  if(note)note.textContent='⬇ Baixando TXT, CSV e JSON...';
+  setTimeout(genTXT,200); setTimeout(genCSV,700); setTimeout(genJSON,1200);
+  setTimeout(()=>{ if(note)note.textContent='✓ 3 arquivos baixados automaticamente'; },1800);
+}
+function genTXT(){
+  const total=state.log.length?state.log[state.log.length-1].t:0;
+  const allHR=state.log.map(l=>l.hr).filter(h=>h&&h>30);
+  const avg=allHR.length?Math.round(allHR.reduce((a,b)=>a+b,0)/allHR.length):0;
+  const max=allHR.length?Math.max(...allHR):0;
+  let t=`PROVA — SERRA GRANDE 6KM v1\nData: ${new Date().toLocaleString('pt-BR')}\nTempo total: ${fmtTime(total)}\nFC média/máx: ${avg}/${max} bpm\n\n--- SPLITS POR KM ---\n`;
+  let prev=0;
+  state.kmMarks.forEach(mk=>{ const sp=mk.t-prev; prev=mk.t; const hrs=state.log.filter(l=>l.km===mk.km).map(l=>l.hr).filter(h=>h&&h>30); const a=hrs.length?Math.round(hrs.reduce((x,y)=>x+y,0)/hrs.length):0; const m=hrs.length?Math.max(...hrs):0; t+=`KM ${mk.km}: ${fmtTime(sp)}  FC ${a||'--'}/${m||'--'}\n`; });
+  if(state.kmMarks.length){ const fs=total-state.kmMarks[state.kmMarks.length-1].t; if(fs>3)t+=`FINAL: ${fmtTime(fs)}\n`; }
+  download(t,`prova_serra_${dateStamp()}.txt`,'text/plain');
+}
+function genCSV(){
+  let c='t_sec,km,mode,terrain,hr\n';
+  state.log.forEach(l=>{ c+=`${l.t},${l.km},${l.mode},${l.terrain},${l.hr||''}\n`; });
+  c+='\nkm_marks_km,t_sec\n';
+  state.kmMarks.forEach(mk=>{ c+=`${mk.km},${mk.t}\n`; });
+  download(c,`prova_serra_${dateStamp()}.csv`,'text/csv');
+}
+function genJSON(){
+  download(JSON.stringify({race:'Serra Grande 6km v1',date:new Date().toISOString(),totalSec:state.log.length?state.log[state.log.length-1].t:0,kmMarks:state.kmMarks,plan:KM_PLAN,log:state.log},null,2),`prova_serra_${dateStamp()}.json`,'application/json');
+}
+
+function diag(m){ const d=document.getElementById('diag'); if(d)d.textContent=m; }
+
+// ===== BINDINGS =====
+document.getElementById('bleBtn').addEventListener('click',connectBLE);
+document.getElementById('vibeTestBtn').addEventListener('click',testVibe);
+document.getElementById('toPrelargBtn').addEventListener('click',goPrelarg);
+document.getElementById('plSkipBtn').addEventListener('click',skipWarmPhase);
+document.getElementById('largadaBtn').addEventListener('click',()=>{ if(confirm('Iniciar a prova agora? (toca ao cruzar o tapete de largada)'))startRace(); });
+document.getElementById('modeToggle').addEventListener('click',toggleMode);
+document.querySelectorAll('.t-btn').forEach(b=>b.addEventListener('click',()=>setTerrain(b.dataset.mode)));
+document.getElementById('kmBtn').addEventListener('click',markKm);
+document.getElementById('undoKmBtn').addEventListener('click',()=>{ if(state.kmIdx>0&&confirm('Voltar 1 km?'))undoKm(); });
+document.getElementById('finishBtn').addEventListener('click',()=>{ if(confirm('Encerrar a prova e ver o relatório?'))finishRace(); });
+document.getElementById('expTxt').addEventListener('click',genTXT);
+document.getElementById('expCsv').addEventListener('click',genCSV);
+document.getElementById('expJson').addEventListener('click',genJSON);
+
+renderSetup();
+checkRecover();
+</script>
+</body>
+</html>
