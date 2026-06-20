@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>Treino H · Rodagem Leve v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0a;--card:#141414;--border:#2a2a2a;--text:#f0f0f0;--muted:#888;
+  --z1:#4a90d9;--z2:#34c759;--z3:#ffcc00;--z4:#ff9500;--z5:#ff3b30;
+  --safe-top:env(safe-area-inset-top,0);--safe-bot:env(safe-area-inset-bottom,0);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:600;height:100vh;overflow:hidden;user-select:none;-webkit-user-select:none}
+.mono{font-family:'JetBrains Mono',monospace;font-weight:700}
+.screen{position:fixed;inset:0;padding:calc(var(--safe-top)+16px) 16px calc(var(--safe-bot)+16px);display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.screen[hidden]{display:none}
+@media screen and (orientation:landscape) and (max-height:500px){
+  #setup,#workout,#report{display:none!important}
+  #landscape-warn{display:flex!important}
+}
+#landscape-warn{display:none;position:fixed;inset:0;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:24px;text-align:center;z-index:9999}
+#landscape-warn .icon{font-size:80px}
+#landscape-warn h1{font-size:24px;font-weight:900}
+#landscape-warn p{font-size:16px;color:var(--muted);max-width:300px}
+#setup h1{font-size:28px;font-weight:900;line-height:1;letter-spacing:-1px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.btn{background:var(--card);border:1px solid var(--border);color:var(--text);font-family:inherit;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:1.5px;padding:14px 18px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;width:100%}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn.connected{border-color:var(--z2);color:var(--z2)}
+.btn.error{border-color:var(--z5);color:var(--z5)}
+.btn.warn-test{border-color:var(--z3);color:var(--z3)}
+.btn.recover{border-color:var(--z4);color:var(--z4);background:rgba(255,149,0,0.1)}
+.phase-list{list-style:none;font-size:14px}
+.phase-list li{padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.phase-list li:last-child{border-bottom:none}
+.phase-list .phase-meta{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace}
+.sim-badge{display:inline-block;background:var(--z4);color:var(--bg);padding:4px 10px;border-radius:4px;font-size:11px;font-weight:900;letter-spacing:2px;margin-left:8px;vertical-align:middle}
+.tip-box{background:#0e1a14;border:1px solid #1a3a2a;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text);line-height:1.5;margin-top:8px}
+.tip-box strong{color:var(--z3)}
+#workout{padding:calc(var(--safe-top)+8px) 12px calc(var(--safe-bot)+8px);gap:8px;justify-content:space-between}
+.phase-header{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.phase-name-big{font-size:22px;font-weight:900;line-height:1;text-transform:uppercase}
+.phase-next{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.phase-progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:6px}
+.phase-progress-bar{height:100%;background:var(--text);width:0%;transition:width 0.3s linear}
+.countdown{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:22vw;line-height:0.85;text-align:center;letter-spacing:-4px;flex:0 0 auto}
+.countdown.warn{color:var(--z4)}
+.countdown.critical{color:var(--z5);animation:pulse 0.5s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:0.4}}
+.hr-display{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:4px;transition:border-color 0.3s,background 0.3s}
+.hr-display.z1{border-color:var(--z1)}.hr-display.z2{border-color:var(--z2)}.hr-display.z3{border-color:var(--z3)}.hr-display.z4{border-color:var(--z4)}.hr-display.z5{border-color:var(--z5)}
+.hr-display.alert{background:rgba(255,59,48,0.15);animation:pulse-bg 1s infinite alternate}
+@keyframes pulse-bg{from{background:rgba(255,59,48,0.2)}to{background:rgba(255,59,48,0.05)}}
+.hr-row{display:flex;align-items:baseline;gap:14px}
+.hr-value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:60px;line-height:1}
+.hr-arrow{font-size:36px;font-weight:900}
+.hr-target{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:'JetBrains Mono',monospace}
+.hr-zone-label{font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.meta-cell{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center}
+.meta-cell .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.meta-cell .value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px}
+.dist-cell{background:var(--card);border:2px solid var(--z2);border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.dist-cell .label{font-size:11px;color:var(--z2);text-transform:uppercase;letter-spacing:2px;font-weight:700}
+.dist-cell .value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:40px;line-height:1}
+.dist-cell .value .unit{font-size:18px;color:var(--muted)}
+.dist-cell.flash{animation:distflash 1.2s ease-out}
+@keyframes distflash{0%{background:rgba(52,199,89,0.4)}100%{background:var(--card)}}
+.controls{display:flex;gap:6px}
+.controls .btn{font-size:13px;padding:12px 4px;letter-spacing:0.5px;flex:1}
+.phase-note{font-size:13px;color:var(--muted);text-align:center;font-style:italic;padding:0 16px;min-height:18px}
+.terrain-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.terrain-row[hidden]{display:none}
+.t-btn{background:var(--card);border:2px solid var(--border);color:var(--muted);font-family:inherit;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:14px 4px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all 0.2s}
+.t-btn .t-icon{font-size:22px;line-height:1}
+.t-btn .t-target{font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:700}
+.t-btn[data-mode="plano"].active{border-color:var(--z2);color:var(--z2);background:rgba(52,199,89,0.1)}
+.t-btn[data-mode="subida"].active{border-color:var(--z3);color:var(--z3);background:rgba(255,204,0,0.1)}
+/* Auto-save indicator */
+#saveIndicator{position:fixed;top:calc(var(--safe-top)+6px);right:12px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#444;pointer-events:none;transition:color 0.3s}
+#saveIndicator.saved{color:var(--z2)}
+#saveIndicator.saving{color:var(--z3)}
+/* Report */
+#report h1{font-size:24px;font-weight:900;letter-spacing:-0.5px}
+.report-summary{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.report-summary .item .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.report-summary .item .value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px}
+.report-phases{list-style:none;font-size:13px}
+.report-phases li{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px}
+.report-phases .phase-line{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.report-phases .stats{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+.report-phases .zones-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:6px;background:#222}
+.zone-seg.z1{background:var(--z1)}.zone-seg.z2{background:var(--z2)}.zone-seg.z3{background:var(--z3)}.zone-seg.z4{background:var(--z4)}.zone-seg.z5{background:var(--z5)}
+.terrain-summary{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:'JetBrains Mono',monospace}
+.terrain-summary .t-line{display:flex;justify-content:space-between;padding:3px 0}
+.terrain-summary .t-line.plano{color:var(--z2)}.terrain-summary .t-line.subida{color:var(--z3)}
+.export-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn.gpx{border-color:var(--z4);color:var(--z4)}
+.auto-dl-note{font-size:12px;color:var(--z2);text-align:center;padding:4px 0}
+#diag{position:fixed;bottom:calc(var(--safe-bot)+4px);left:8px;font-size:9px;color:#444;font-family:'JetBrains Mono',monospace;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="landscape-warn">
+  <div class="icon">📱</div>
+  <h1>GIRA O CELULAR</h1>
+  <p>Trava a rotação em retrato nas configurações antes de iniciar.</p>
+</div>
+
+<div id="saveIndicator">●</div>
+
+<!-- RECOVER MODAL -->
+<div id="recoverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:24px">
+  <div class="card" style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-size:20px;font-weight:900">⚠ SESSÃO INTERROMPIDA</div>
+    <div style="font-size:14px;color:var(--muted);line-height:1.5" id="recoverInfo">Uma sessão anterior foi encontrada.</div>
+    <button class="btn recover" id="recoverBtn">↩ RECUPERAR E EXPORTAR</button>
+    <button class="btn error" id="discardBtn">✕ DESCARTAR E COMEÇAR DO ZERO</button>
+  </div>
+</div>
+
+<div id="setup" class="screen">
+  <div>
+    <h1>TREINO H<br>RODAGEM LEVE<span class="sim-badge" id="simBadge" hidden>SIM</span></h1>
+    <div style="color:var(--muted);font-size:14px;margin-top:6px">v1 · Base semana 1 · GPS+GPX+marcos 500m · <span id="totalDuration" class="mono">40:00</span></div>
+  </div>
+  <div class="card">
+    <h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-top:0">Sensores</h2>
+    <div style="height:10px"></div>
+    <button class="btn" id="bleBtn">📡 Conectar cinta (BLE)</button>
+    <div class="tip-box"><strong>⚠ Ordem:</strong> HTML primeiro, Strava depois.</div>
+    <div style="height:8px"></div>
+    <button class="btn" id="gpsBtn">📍 Ativar GPS</button>
+    <div style="height:8px"></div>
+    <button class="btn warn-test" id="vibeTestBtn">📳 Testar vibração</button>
+  </div>
+  <div class="card">
+    <h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-top:0">Fases</h2>
+    <ul class="phase-list" id="phaseList"></ul>
+  </div>
+  <div class="card" style="background:#1a1a0e;border-color:#3a3a1a">
+    <h2 style="font-size:13px;color:var(--z3);text-transform:uppercase;letter-spacing:2px;margin-top:0">Rodagem Z2 · fecha semana 1</h2>
+    <div style="font-size:13px;line-height:1.6;margin-top:6px">
+      Z2 confortável, ondulado suave. Teto 160 nas subidinhas.<br>
+      <strong style="color:var(--z3)">Conversa possível o tempo todo.</strong> Volume aeróbico fácil. FC manda, não o pace.
+    </div>
+  </div>
+  <div class="card" style="background:#0e1420;border-color:#1a2a3a">
+    <h2 style="font-size:13px;color:var(--z1);text-transform:uppercase;letter-spacing:2px;margin-top:0">Zonas novas · FCmáx 196</h2>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.8;margin-top:6px">
+      <div><span style="color:var(--z1)">●</span> Z1: 132–145 · <span style="color:var(--z2)">●</span> Z2: 145–158</div>
+      <div><span style="color:var(--z3)">●</span> Z3: 158–170 · <span style="color:var(--z4)">●</span> Z4: 170–183</div>
+      <div><span style="color:var(--z5)">●</span> Z5: 183–196</div>
+    </div>
+  </div>
+  <div class="card" style="background:#0a1a0a;border-color:#1a3a1a">
+    <h2 style="font-size:13px;color:var(--z2);text-transform:uppercase;letter-spacing:2px;margin-top:0">💾 Auto-save ativo</h2>
+    <div style="font-size:13px;line-height:1.6;margin-top:6px;color:var(--muted)">
+      Sessão salva automaticamente a cada 10s. Se o app fechar, reabre o HTML e recupera os dados.
+      Download automático ao encerrar.
+    </div>
+  </div>
+  <div class="card" style="background:#1a1a0e;border-color:#3a3a1a">
+    <h2 style="font-size:13px;color:var(--z3);text-transform:uppercase;letter-spacing:2px;margin-top:0">Antes de iniciar</h2>
+    <div style="font-size:13px;line-height:1.6;margin-top:6px">
+      <strong style="color:var(--z3)">1.</strong> Trava rotação em retrato<br>
+      <strong style="color:var(--z3)">2.</strong> Desliga "Não perturbe" e economia de bateria<br>
+      <strong style="color:var(--z3)">3.</strong> Cinta no HTML ANTES do Strava<br>
+      <strong style="color:var(--z3)">4.</strong> Não sai do Chrome durante o treino
+    </div>
+  </div>
+  <button class="btn primary" id="startBtn">▶ INICIAR TREINO</button>
+  <div style="height:8px"></div>
+</div>
+
+<div id="workout" class="screen" hidden>
+  <div class="phase-header">
+    <div class="phase-name-big" id="phName">—</div>
+    <div class="phase-next" id="phNext">—</div>
+    <div class="phase-progress"><div class="phase-progress-bar" id="phBar"></div></div>
+  </div>
+  <div class="countdown" id="countdown">00:00</div>
+  <div class="phase-note" id="phNote"></div>
+  <div class="hr-display" id="hrDisp">
+    <div class="hr-zone-label" id="hrZone">—</div>
+    <div class="hr-row">
+      <div class="hr-value" id="hrValue">--</div>
+      <div class="hr-arrow" id="hrArrow"></div>
+    </div>
+    <div class="hr-target" id="hrTarget">alvo: —</div>
+  </div>
+  <div class="dist-cell" id="distCell">
+    <div class="label">Distância · GPS</div>
+    <div class="value"><span id="metaDist">0.00</span><span class="unit"> km</span></div>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-cell"><div class="label">Decorrido</div><div class="value mono" id="metaElapsed">00:00</div></div>
+    <div class="meta-cell"><div class="label">Restante</div><div class="value mono" id="metaRemain">00:00</div></div>
+    <div class="meta-cell"><div class="label">Pace</div><div class="value mono" id="metaPace">--:--</div></div>
+  </div>
+  <div class="controls">
+    <button class="btn" id="pauseBtn">⏸ PAUSAR</button>
+    <button class="btn" id="skipBtn">⏭ PULAR</button>
+    <button class="btn" id="add5Btn">+5 MIN</button>
+    <button class="btn error" id="stopBtn">⏹ ENCERRAR</button>
+  </div>
+</div>
+
+<div id="report" class="screen" hidden>
+  <h1>RELATÓRIO DO TREINO</h1>
+  <div class="auto-dl-note" id="autoDlNote">⬇ Download automático iniciado...</div>
+  <div class="report-summary" id="reportSummary"></div>
+  <div>
+    <h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Por fase</h2>
+    <ul class="report-phases" id="reportPhases"></ul>
+  </div>
+  <div class="auto-dl-note">Os arquivos já foram baixados automaticamente. Toque abaixo se precisar de mais.</div>
+  <div class="export-row">
+    <button class="btn gpx" id="expGpx">📍 GPX → STRAVA</button>
+    <button class="btn" id="expTxt">TXT</button>
+    <button class="btn" id="expCsv">CSV</button>
+    <button class="btn" id="expJson">JSON</button>
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:center;padding:2px 8px">O GPX importa direto em strava.com/upload (mapa + FC + pace).</div>
+  <button class="btn" onclick="location.reload()">↻ NOVO TREINO</button>
+  <div style="height:12px"></div>
+</div>
+
+<div id="diag"></div>
+
+<script>
+'use strict';
+
+const SIM = new URLSearchParams(location.search).get('sim') === '1';
+const GRACE_SEC = 15;
+const SILENCE_LAST_SEC = 3;
+const HR_ALERT_INTERVAL = 5000;
+const STORAGE_KEY = 'treino_h_session_v1';
+const AUTOSAVE_INTERVAL = 10000; // 10s
+
+// Zonas novas — Karvonen, FC máx 196, repouso 68
+const ZONES = [
+  {key:'z1',label:'Z1',min:132,max:145},
+  {key:'z2',label:'Z2',min:145,max:158},
+  {key:'z3',label:'Z3',min:158,max:170},
+  {key:'z4',label:'Z4',min:170,max:183},
+  {key:'z5',label:'Z5',min:183,max:196},
+];
+
+function zoneOf(hr){
+  if(!hr||hr<1)return null;
+  if(hr<132)return{key:'sub',label:'<Z1'};
+  for(const z of ZONES)if(hr>=z.min&&hr<z.max)return z;
+  return ZONES[ZONES.length-1];
+}
+
+function currentTarget(){
+  const p = PHASES[state.phaseIdx];
+  return {min:p?p.hrMin:0, max:p?p.hrMax:200, label:null};
+}
+
+function buildPhases(){
+  const ph = [];
+  ph.push({name:'Aquecimento', dur:480, hrMin:132, hrMax:148, kind:'warm',
+    note:'Trote leve crescente. Z1 → Z2. Pernas acordando.'});
+  ph.push({name:'Rodagem Z2', dur:1920, hrMin:145, hrMax:160, kind:'main',
+    note:'Z2 confortável. Ondulado suave. Nas subidinhas deixa subir até 160. Conversa possível.'});
+  return ph;
+}
+
+function simulate(phases){
+  return phases.map(p=>({...p, dur:p.kind==='warm'?10:p.kind==='main'?15:9}));
+}
+
+let PHASES = buildPhases();
+if(SIM) PHASES = simulate(PHASES);
+let TOTAL_DUR = PHASES.reduce((s,p)=>s+p.dur, 0);
+
+let state = {
+  running:false, paused:false, startTs:0, startWallClock:0, pausedAt:0, pausedTotal:0,
+  phaseIdx:0, phaseStartTs:0, phasePausedTotal:0,
+  hr:null, hrLastTs:0, hrAlertTs:0, hrInZone:null,
+  log:[], positions:[], lastPos:null, totalDist:0, nextMark:500,
+  visibilityEvents:[], wakeLockReleases:0,
+};
+
+// ===== AUTO-SAVE =====
+function saveSession(){
+  try{
+    const data = {
+      ts: Date.now(),
+      log: state.log,
+      totalDist: state.totalDist,
+      phaseIdx: state.phaseIdx,
+      elapsed: Math.round(elapsedSec()),
+      phases: PHASES.map(p=>p.name),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setSaveIndicator('saved');
+  }catch(e){ setSaveIndicator(''); }
+}
+
+function clearSession(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+}
+
+function loadSession(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+function setSaveIndicator(s){
+  const el = document.getElementById('saveIndicator');
+  if(!el) return;
+  el.className = s;
+  el.textContent = s==='saved'?'● salvo':s==='saving'?'● salvando':'●';
+}
+
+// ===== RECOVER CHECK =====
+function checkRecover(){
+  const saved = loadSession();
+  if(!saved || !saved.log || saved.log.length < 5) return;
+  const ageMin = (Date.now() - saved.ts) / 60000;
+  if(ageMin > 180) { clearSession(); return; } // mais de 3h: descarta
+  const modal = document.getElementById('recoverModal');
+  const info = document.getElementById('recoverInfo');
+  info.textContent = `Sessão de ${new Date(saved.ts).toLocaleTimeString('pt-BR')} · ${saved.log.length} amostras · ${fmtTime(saved.elapsed)} decorridos.`;
+  modal.style.display = 'flex';
+
+  document.getElementById('recoverBtn').onclick = () => {
+    modal.style.display = 'none';
+    // Monta relatório com os dados salvos
+    state.log = saved.log;
+    state.totalDist = saved.totalDist || 0;
+    renderReport(true);
+    document.getElementById('setup').hidden = true;
+    document.getElementById('report').hidden = false;
+    // Auto-download dos dados recuperados
+    setTimeout(()=>autoDownload(), 800);
+    clearSession();
+  };
+  document.getElementById('discardBtn').onclick = () => {
+    clearSession();
+    modal.style.display = 'none';
+  };
+}
+
+// ===== AUDIO =====
+let audioCtx = null;
+function initAudio(){ if(audioCtx)return; try{ audioCtx=new(window.AudioContext||window.webkitAudioContext)() }catch(e){} }
+function beep(freq,dur=0.15,vol=0.3,type='sine'){
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+  g.gain.setValueAtTime(0,audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(vol,audioCtx.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+dur);
+}
+function chord(freqs,dur=0.4,vol=0.2){ freqs.forEach(f=>beep(f,dur,vol)); }
+const SOUND={
+  countdown:()=>beep(880,0.1,0.3),
+  go:()=>{ beep(1200,0.25,0.35) },
+  phaseChange:()=>{ beep(660,0.15); setTimeout(()=>beep(990,0.2),120) },
+  inZone:()=>chord([784,1175],0.35,0.18),
+  hrHigh:()=>beep(330,0.12,0.25,'square'),
+  hrLow:()=>beep(220,0.18,0.25,'square'),
+  warn:()=>{ beep(180,0.25,0.3,'square'); setTimeout(()=>beep(180,0.25,0.3,'square'),200) },
+  extend:()=>{ beep(550,0.1,0.25); setTimeout(()=>beep(770,0.12,0.25),100); setTimeout(()=>beep(990,0.15,0.25),220) },
+  mark500:()=>{ beep(988,0.12,0.3); setTimeout(()=>beep(1319,0.18,0.3),130) },
+  markKm:()=>{ beep(988,0.12,0.3); setTimeout(()=>beep(1319,0.12,0.3),120); setTimeout(()=>beep(1568,0.22,0.32),240) },
+};
+
+let vibeSupported = 'vibrate' in navigator;
+function vibe(p){ if(!vibeSupported)return false; try{ return navigator.vibrate(p) }catch(e){ return false } }
+function testVibe(){
+  const btn=document.getElementById('vibeTestBtn'); initAudio();
+  const ok=vibe([300,150,300,150,500]); SOUND.countdown();
+  if(ok===false){
+    btn.classList.add('error'); btn.classList.remove('warn-test');
+    btn.textContent='⚠ Vibração bloqueada';
+    setTimeout(()=>alert('Vibração bloqueada.\n\n1. "Não perturbe" DESLIGADO\n2. Economia de bateria DESLIGADA\n3. Som ATIVO\n4. Use Chrome'),300);
+  }else{ btn.classList.add('connected'); btn.classList.remove('warn-test','error'); btn.textContent='✓ Vibração OK'; }
+}
+
+// ===== BLE =====
+let bleDevice=null,bleChar=null;
+async function connectBLE(){
+  const btn=document.getElementById('bleBtn');
+  try{
+    if(!navigator.bluetooth) throw new Error('Bluetooth não disponível');
+    btn.textContent='⏳ Procurando...';
+    bleDevice=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}],optionalServices:['battery_service']});
+    bleDevice.addEventListener('gattserverdisconnected',()=>{ btn.classList.remove('connected'); btn.classList.add('error'); btn.textContent='⚠ Desconectado'; });
+    const server=await bleDevice.gatt.connect();
+    const service=await server.getPrimaryService('heart_rate');
+    bleChar=await service.getCharacteristic('heart_rate_measurement');
+    await bleChar.startNotifications();
+    bleChar.addEventListener('characteristicvaluechanged',e=>{
+      const v=e.target.value; const flags=v.getUint8(0);
+      const hr=(flags&0x01)?v.getUint16(1,true):v.getUint8(1);
+      state.hr=hr; state.hrLastTs=Date.now();
+    });
+    btn.classList.add('connected'); btn.classList.remove('error');
+    btn.textContent='✓ '+(bleDevice.name||'Cinta')+' conectada';
+  }catch(e){
+    btn.classList.add('error');
+    const msg=e.message||'Erro BLE';
+    if(msg.includes('GATT')||msg.includes('NotFound')){
+      btn.textContent='⚠ Cinta ocupada — feche o Strava';
+    }else{ btn.textContent='⚠ '+msg.slice(0,40); }
+  }
+}
+
+// ===== GPS =====
+let watchId=null;
+function toggleGPS(){
+  const btn=document.getElementById('gpsBtn');
+  if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; btn.classList.remove('connected'); btn.textContent='📍 Ativar GPS'; return; }
+  if(!navigator.geolocation){ btn.classList.add('error'); btn.textContent='⚠ GPS indisponível'; return; }
+  btn.textContent='⏳ Buscando...';
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{
+      const p={lat:pos.coords.latitude,lng:pos.coords.longitude,alt:pos.coords.altitude,t:Date.now(),spd:pos.coords.speed,acc:pos.coords.accuracy};
+      if(state.lastPos&&p.acc&&p.acc<30){ const d=haversine(state.lastPos.lat,state.lastPos.lng,p.lat,p.lng); const dt=(p.t-state.lastPos.t)/1000; if(d<50&&dt>0&&d/dt<8)state.totalDist+=d; }
+      state.lastPos=p; state.positions.push(p);
+      btn.classList.add('connected'); btn.textContent='✓ GPS ativo'+(p.acc?` (±${Math.round(p.acc)}m)`:'');
+    },
+    err=>{ btn.classList.add('error'); btn.textContent='⚠ '+err.message; },
+    {enableHighAccuracy:true,maximumAge:1000,timeout:10000}
+  );
+}
+function haversine(la1,lo1,la2,lo2){
+  const R=6371000,toRad=d=>d*Math.PI/180;
+  const dLa=toRad(la2-la1),dLo=toRad(lo2-lo1);
+  const a=Math.sin(dLa/2)**2+Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function fmtTime(s){ s=Math.max(0,Math.floor(s)); const m=Math.floor(s/60),x=s%60; return String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function fmtPace(s){ if(!isFinite(s)||s<=0||s>1800)return'--:--'; const m=Math.floor(s/60),x=Math.round(s%60); return m+':'+String(x).padStart(2,'0'); }
+
+function renderSetup(){
+  document.getElementById('totalDuration').textContent=fmtTime(TOTAL_DUR);
+  if(SIM)document.getElementById('simBadge').hidden=false;
+  const ul=document.getElementById('phaseList'); ul.innerHTML='';
+  PHASES.forEach(p=>{
+    const li=document.createElement('li');
+    const tgt=p.hrMin>0?`${p.hrMin}-${p.hrMax}`:`<${p.hrMax}`;
+    li.innerHTML=`<span>${p.name}</span><span class="phase-meta">${fmtTime(p.dur)} · ${tgt}</span>`;
+    ul.appendChild(li);
+  });
+}
+
+// ===== WAKE LOCK =====
+let wakeLock=null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock'in navigator){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ state.wakeLockReleases++; diag(`wl rel #${state.wakeLockReleases}`); }); }
+  }catch(e){ diag('wl err'); }
+}
+document.addEventListener('visibilitychange', async()=>{
+  state.visibilityEvents.push({t:Date.now(),state:document.visibilityState});
+  if(document.visibilityState==='visible'&&state.running&&!state.paused){ await requestWakeLock(); diag('wl re-acq'); }
+});
+
+let tickInterval=null, logInterval=null, autoSaveInterval=null;
+
+function startWorkout(){
+  initAudio(); requestWakeLock();
+  state.running=true; state.startTs=Date.now();
+  state.startWallClock=Date.now(); // âncora para timestamps absolutos do GPX
+  document.getElementById('setup').hidden=true;
+  document.getElementById('workout').hidden=false;
+  vibe([200,100,200,100,400]); SOUND.go();
+  enterPhase(0);
+  tickInterval=setInterval(tick,200);
+  logInterval=setInterval(logSecond,1000);
+  autoSaveInterval=setInterval(()=>{ if(state.running&&!state.paused) saveSession(); }, AUTOSAVE_INTERVAL);
+}
+
+function enterPhase(idx){
+  state.phaseIdx=idx; state.phaseStartTs=Date.now(); state.phasePausedTotal=0;
+  state.hrAlertTs=0; state.hrInZone=null;
+  SOUND.phaseChange(); vibe([300,100,300]);
+  renderPhaseHeader();
+}
+
+function updateTargetLabel(){
+  const t=currentTarget();
+  const tgt=t.min>0?`${t.min}-${t.max} bpm`:`< ${t.max} bpm`;
+  document.getElementById('hrTarget').textContent=`alvo: ${tgt}`;
+}
+
+function renderPhaseHeader(){
+  const p=PHASES[state.phaseIdx];
+  document.getElementById('phName').textContent=p.name.toUpperCase();
+  document.getElementById('phNote').textContent=p.note||'';
+  const next=PHASES[state.phaseIdx+1];
+  document.getElementById('phNext').textContent=next?'Próxima: '+next.name:'Última fase';
+  updateTargetLabel();
+}
+
+function elapsedSec(){ if(!state.running)return 0; return (Date.now()-state.startTs-state.pausedTotal-(state.paused?Date.now()-state.pausedAt:0))/1000; }
+function phaseElapsedSec(){ if(!state.running)return 0; return (Date.now()-state.phaseStartTs-state.phasePausedTotal-(state.paused?Date.now()-state.pausedAt:0))/1000; }
+
+let lastCDAnnounce=-1;
+function tick(){
+  if(state.paused)return;
+  const p=PHASES[state.phaseIdx];
+  const pe=phaseElapsedSec();
+  const remain=p.dur-pe;
+  const cd=document.getElementById('countdown');
+  cd.textContent=fmtTime(Math.max(0,remain));
+  cd.classList.toggle('warn',remain<=10&&remain>3);
+  cd.classList.toggle('critical',remain<=3&&remain>0);
+  if(remain>0&&remain<=3.5&&remain>0.5){
+    const sec=Math.ceil(remain);
+    if(sec!==lastCDAnnounce&&sec>=1&&sec<=3){ lastCDAnnounce=sec; SOUND.countdown(); vibe([120,60,120]); }
+  }else if(remain>3.5) lastCDAnnounce=-1;
+  document.getElementById('phBar').style.width=Math.min(100,(pe/p.dur)*100)+'%';
+  document.getElementById('metaElapsed').textContent=fmtTime(elapsedSec());
+  document.getElementById('metaRemain').textContent=fmtTime(TOTAL_DUR-elapsedSec());
+  document.getElementById('metaDist').textContent=(state.totalDist/1000).toFixed(2);
+  if(state.totalDist>50){ document.getElementById('metaPace').textContent=fmtPace(elapsedSec()/(state.totalDist/1000)); }
+  checkDistMark();
+  renderHR();
+  if(pe>GRACE_SEC&&remain>SILENCE_LAST_SEC&&state.hr) checkHRAlert();
+  if(pe>=p.dur){
+    if(state.phaseIdx+1>=PHASES.length) finishWorkout();
+    else enterPhase(state.phaseIdx+1);
+  }
+}
+
+// Marco a cada 500m: som + vibração + flash. 1km tem som especial.
+function checkDistMark(){
+  if(state.totalDist >= state.nextMark){
+    const markM = state.nextMark;
+    const isFullKm = (markM % 1000 === 0);
+    if(isFullKm){ SOUND.markKm(); vibe([250,100,250,100,250]); }
+    else { SOUND.mark500(); vibe([200,100,200]); }
+    // flash visual na célula de distância
+    const dc=document.getElementById('distCell');
+    if(dc){ dc.classList.remove('flash'); void dc.offsetWidth; dc.classList.add('flash'); }
+    state.nextMark += 500;
+  }
+}
+
+function renderHR(){
+  const disp=document.getElementById('hrDisp'),v=document.getElementById('hrValue'),a=document.getElementById('hrArrow'),zl=document.getElementById('hrZone');
+  const fresh=state.hr&&(Date.now()-state.hrLastTs<8000);
+  if(!fresh){ v.textContent='--'; a.textContent=''; zl.textContent=state.hr?'SINAL FRACO':'SEM CINTA'; disp.className='hr-display'; return; }
+  v.textContent=state.hr;
+  const z=zoneOf(state.hr); zl.textContent=z?z.label:'—';
+  disp.className='hr-display';
+  if(z&&['z1','z2','z3','z4','z5'].includes(z.key)) disp.classList.add(z.key);
+  const tgt=currentTarget();
+  if(tgt.min>0&&state.hr<tgt.min){ a.textContent='↗'; a.style.color='var(--z4)'; }
+  else if(state.hr>tgt.max){ a.textContent='↘'; a.style.color='var(--z5)'; }
+  else{ a.textContent='✓'; a.style.color='var(--z2)'; }
+  disp.classList.toggle('alert',state.hr>tgt.max+5);
+}
+
+function checkHRAlert(){
+  const hr=state.hr; const tgt=currentTarget();
+  const tooLow=tgt.min>0&&hr<tgt.min; const tooHigh=hr>tgt.max;
+  const out=tooLow||tooHigh; const now=Date.now();
+  if(!out&&state.hrInZone===false){ SOUND.inZone(); vibe([80,40,80]); }
+  if(state.hrInZone===null||state.hrInZone!==!out) state.hrInZone=!out;
+  if(out&&now-state.hrAlertTs>=HR_ALERT_INTERVAL){
+    state.hrAlertTs=now;
+    if(tooHigh&&hr>tgt.max+8){ SOUND.warn(); vibe([200,100,200,100,200]); }
+    else if(tooHigh){ SOUND.hrHigh(); vibe([150,80,150]); }
+    else if(tooLow){ SOUND.hrLow(); vibe([100,80,100]); }
+  }
+}
+
+function logSecond(){
+  if(state.paused)return;
+  state.log.push({t:Math.round(elapsedSec()),phase:state.phaseIdx,phaseName:PHASES[state.phaseIdx].name,hr:state.hr,dist:Math.round(state.totalDist),lat:state.lastPos?.lat,lng:state.lastPos?.lng,alt:state.lastPos?.alt});
+}
+
+function togglePause(){
+  if(!state.running)return;
+  if(state.paused){ const delta=Date.now()-state.pausedAt; state.pausedTotal+=delta; state.phasePausedTotal+=delta; state.paused=false; document.getElementById('pauseBtn').textContent='⏸ PAUSAR'; vibe(80); }
+  else{ state.pausedAt=Date.now(); state.paused=true; document.getElementById('pauseBtn').textContent='▶ RETOMAR'; vibe([80,80,80]); }
+}
+function skipPhase(){ if(!state.running)return; if(state.phaseIdx+1>=PHASES.length)finishWorkout(); else enterPhase(state.phaseIdx+1); }
+function addFiveMin(){ if(!state.running)return; PHASES[state.phaseIdx].dur+=300; TOTAL_DUR+=300; SOUND.extend(); vibe([100,50,100,50,200]); }
+
+function finishWorkout(){
+  state.running=false;
+  clearInterval(tickInterval); clearInterval(logInterval); clearInterval(autoSaveInterval);
+  if(wakeLock)try{ wakeLock.release(); }catch(e){}
+  SOUND.go(); setTimeout(()=>SOUND.inZone(),250);
+  vibe([400,200,400,200,800]);
+  clearSession(); // limpa save pois terminou normalmente
+  document.getElementById('workout').hidden=true;
+  document.getElementById('report').hidden=false;
+  renderReport(false);
+  // Auto-download após 800ms (deixa relatório renderizar primeiro)
+  setTimeout(()=>autoDownload(), 800);
+}
+
+function autoDownload(){
+  const note=document.getElementById('autoDlNote');
+  const hasGps = state.log.some(l=>l.lat!=null && l.lng!=null);
+  if(note)note.textContent='⬇ Baixando arquivos...';
+  setTimeout(()=>{ genTXT(); }, 200);
+  setTimeout(()=>{ genCSV(); }, 700);
+  setTimeout(()=>{ genJSON(); }, 1200);
+  if(hasGps) setTimeout(()=>{ genGPX(); }, 1700);
+  setTimeout(()=>{ if(note)note.textContent=hasGps?'✓ 4 arquivos baixados (incl. GPX p/ Strava)':'✓ 3 arquivos baixados automaticamente'; }, 2300);
+}
+
+function renderReport(isRecovered=false){
+  const total=state.log.length?state.log[state.log.length-1].t:0;
+  const allHR=state.log.map(l=>l.hr).filter(h=>h&&h>30);
+  const avg=allHR.length?Math.round(allHR.reduce((a,b)=>a+b,0)/allHR.length):0;
+  const max=allHR.length?Math.max(...allHR):0;
+  const min=allHR.length?Math.min(...allHR):0;
+  const distKm=(state.totalDist/1000).toFixed(2);
+  const paceAvg=state.totalDist>100?fmtPace(total/(state.totalDist/1000)):'--:--';
+  const note=document.getElementById('autoDlNote');
+  if(isRecovered&&note) note.textContent='♻ Sessão recuperada. Download automático iniciado...';
+  document.getElementById('reportSummary').innerHTML=`
+    <div class="item"><div class="label">Tempo</div><div class="value">${fmtTime(total)}</div></div>
+    <div class="item"><div class="label">Distância</div><div class="value">${distKm} km</div></div>
+    <div class="item"><div class="label">Pace médio</div><div class="value">${paceAvg}/km</div></div>
+    <div class="item"><div class="label">FC média</div><div class="value">${avg||'--'} bpm</div></div>
+    <div class="item"><div class="label">FC máx</div><div class="value">${max||'--'} bpm</div></div>
+    <div class="item"><div class="label">FC mín</div><div class="value">${min||'--'} bpm</div></div>
+  `;
+  // Fases
+  const ul=document.getElementById('reportPhases'); ul.innerHTML='';
+  PHASES.forEach((p,idx)=>{ const hrs=state.log.filter(l=>l.phase===idx).map(l=>l.hr).filter(h=>h&&h>30); const a=hrs.length?Math.round(hrs.reduce((x,y)=>x+y,0)/hrs.length):0; const m=hrs.length?Math.max(...hrs):0; const zc={z1:0,z2:0,z3:0,z4:0,z5:0}; hrs.forEach(h=>{ const z=zoneOf(h); if(z&&zc[z.key]!==undefined)zc[z.key]++; }); const totalZ=hrs.length||1; const segs=['z1','z2','z3','z4','z5'].map(k=>zc[k]?`<div class="zone-seg ${k}" style="width:${(zc[k]/totalZ*100)}%"></div>`:'').join(''); const li=document.createElement('li'); li.innerHTML=`<div class="phase-line"><strong>${p.name}</strong><span class="stats">${fmtTime(p.dur)} · ${a||'--'}/${m||'--'} bpm</span></div><div class="zones-bar">${segs}</div>`; ul.appendChild(li); });
+}
+
+// ===== EXPORTS =====
+function dateStamp(){ const d=new Date(); return d.toISOString().slice(0,16).replace(/[-:T]/g,''); }
+function download(content,filename,type){ const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },100); }
+
+function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// GPX 1.1 com extensão de FC (Garmin TrackPointExtension) — importável no Strava
+function genGPX(){
+  // âncora de tempo absoluto: usa startWallClock; fallback p/ agora menos duração
+  const totalSec = state.log.length ? state.log[state.log.length-1].t : 0;
+  const anchor = state.startWallClock || (Date.now() - totalSec*1000);
+
+  // monta trackpoints apenas com pontos que têm coordenada válida
+  const pts = state.log.filter(l => l.lat!=null && l.lng!=null);
+
+  let trkpts = '';
+  if(pts.length){
+    pts.forEach(l=>{
+      const iso = new Date(anchor + l.t*1000).toISOString();
+      let pt = `<trkpt lat="${l.lat}" lon="${l.lng}">`;
+      if(l.alt!=null && !isNaN(l.alt)) pt += `<ele>${l.alt.toFixed(1)}</ele>`;
+      pt += `<time>${iso}</time>`;
+      if(l.hr && l.hr>30){
+        pt += `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${l.hr}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>`;
+      }
+      pt += `</trkpt>`;
+      trkpts += pt + '\n';
+    });
+  }
+
+  const startISO = new Date(anchor).toISOString();
+  const gpx =
+`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Treino H HTML" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd">
+<metadata><time>${startISO}</time></metadata>
+<trk>
+<name>${xmlEsc('Treino H - Rodagem Leve')}</name>
+<type>running</type>
+<trkseg>
+${trkpts}</trkseg>
+</trk>
+</gpx>`;
+
+  download(gpx, `treino_h_${dateStamp()}.gpx`, 'application/gpx+xml');
+  return pts.length;
+}
+
+function genTXT(){
+  const total=state.log.length?state.log[state.log.length-1].t:0;
+  const allHR=state.log.map(l=>l.hr).filter(h=>h&&h>30);
+  const avg=allHR.length?Math.round(allHR.reduce((a,b)=>a+b,0)/allHR.length):0;
+  const max=allHR.length?Math.max(...allHR):0;
+  let t=`TREINO H — RODAGEM LEVE v1\nData: ${new Date().toLocaleString('pt-BR')}\nTempo: ${fmtTime(total)} · Distância: ${(state.totalDist/1000).toFixed(2)} km\nFC média/máx: ${avg}/${max} bpm\nwl releases: ${state.wakeLockReleases}\n\n--- FASES ---\n`;
+  PHASES.forEach((p,idx)=>{ const hrs=state.log.filter(l=>l.phase===idx).map(l=>l.hr).filter(h=>h&&h>30); const a=hrs.length?Math.round(hrs.reduce((x,y)=>x+y,0)/hrs.length):0; const m=hrs.length?Math.max(...hrs):0; t+=`${String(idx+1).padStart(2)}. ${p.name.padEnd(22)} ${fmtTime(p.dur)}  FC ${a||'--'}/${m||'--'}\n`; });
+  download(t,`treino_h_${dateStamp()}.txt`,'text/plain');
+}
+function genCSV(){
+  let c='t_sec,phase_idx,phase_name,hr,dist_m,lat,lng,alt\n';
+  state.log.forEach(l=>{ c+=`${l.t},${l.phase},"${l.phaseName}",${l.hr||''},${l.dist||''},${l.lat||''},${l.lng||''},${l.alt||''}\n`; });
+  download(c,`treino_h_${dateStamp()}.csv`,'text/csv');
+}
+function genJSON(){
+  const d={workout:'Treino H — Rodagem Leve v1',date:new Date().toISOString(),totalSec:state.log.length?state.log[state.log.length-1].t:0,totalDistM:Math.round(state.totalDist),phases:PHASES,log:state.log,positions:state.positions,wakeLockReleases:state.wakeLockReleases};
+  download(JSON.stringify(d,null,2),`treino_h_${dateStamp()}.json`,'application/json');
+}
+
+function diag(msg){ const d=document.getElementById('diag'); if(d)d.textContent=msg; }
+
+// ===== BINDINGS =====
+document.getElementById('bleBtn').addEventListener('click',connectBLE);
+document.getElementById('gpsBtn').addEventListener('click',toggleGPS);
+document.getElementById('vibeTestBtn').addEventListener('click',testVibe);
+document.getElementById('startBtn').addEventListener('click',startWorkout);
+document.getElementById('pauseBtn').addEventListener('click',togglePause);
+document.getElementById('skipBtn').addEventListener('click',()=>{ if(confirm('Pular esta fase?'))skipPhase(); });
+document.getElementById('add5Btn').addEventListener('click',addFiveMin);
+document.getElementById('stopBtn').addEventListener('click',()=>{ if(confirm('Encerrar treino?'))finishWorkout(); });
+document.getElementById('expTxt').addEventListener('click',genTXT);
+document.getElementById('expCsv').addEventListener('click',genCSV);
+document.getElementById('expJson').addEventListener('click',genJSON);
+document.getElementById('expGpx').addEventListener('click',()=>{
+  const n=genGPX();
+  if(n===0)alert('Nenhum ponto de GPS foi registrado neste treino.\n\nO GPX foi gerado mas estará vazio. Para um GPX válido, ative o GPS na tela inicial antes de iniciar o treino.');
+});
+
+renderSetup();
+checkRecover(); // verifica sessão interrompida ao carregar
+</script>
+</body>
+</html>
